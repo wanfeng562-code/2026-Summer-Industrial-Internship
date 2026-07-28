@@ -2,15 +2,22 @@ package com.alibaba.ticketsystem.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.alibaba.ticketsystem.dto.MessageRequest;
+import com.alibaba.ticketsystem.dto.TicketAssignRequest;
+import com.alibaba.ticketsystem.dto.TicketCloseRequest;
 import com.alibaba.ticketsystem.dto.TicketCreateRequest;
-import com.alibaba.ticketsystem.dto.TicketUpdateRequest;
+import com.alibaba.ticketsystem.dto.TicketResolveRequest;
 import com.alibaba.ticketsystem.entity.Ticket;
+import com.alibaba.ticketsystem.service.TicketOperationLogService;
 import com.alibaba.ticketsystem.service.TicketService;
+import com.alibaba.ticketsystem.service.TicketWorkflowService;
 import com.alibaba.ticketsystem.utils.R;
 import com.alibaba.ticketsystem.vo.TicketVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -21,11 +28,14 @@ import org.springframework.web.bind.annotation.*;
  * @author YanTao
  * @since 2026-07-17
  */
-@RestController  //返回数据对象  控制层  此类实例放入spring容器中@Component
+@Validated
+@RestController
+@RequiredArgsConstructor
 public class TicketController {
 
-    @Autowired
-    private TicketService ticketService;
+    private final TicketService ticketService;
+    private final TicketWorkflowService workflowService;
+    private final TicketOperationLogService operationLogService;
 
     /*
     *工单分页列表查询
@@ -33,8 +43,9 @@ public class TicketController {
      */
     @SaCheckPermission("ticket:query") //判断该接口是否有查询权限
     @GetMapping("/tickets")
-    public R<?> pageTickets(@RequestParam(value = "current", defaultValue = "1", required = false) Integer current,
-                            @RequestParam(value = "size",defaultValue = "10", required = false) Integer size){
+    public R<?> pageTickets(
+            @RequestParam(value = "current", defaultValue = "1") @Min(1) Integer current,
+            @RequestParam(value = "size", defaultValue = "10") @Min(1) @Max(100) Integer size) {
         Page<TicketVo> pt = ticketService.pageTickets(current,size);
         return R.success("工单分页列表查询成功", pt);
     }
@@ -64,19 +75,51 @@ public class TicketController {
         return R.success("工单消息/沟通消息添加成功");
     }
 
-    /*
-     *更新工单状态
-     * 请求体：{ "status": "新状态", "category": "新分类", "priority": "优先级", "agentId": "客服ID" }
-     * 使用场景：客服修改工单状态（如从"人工复核"改为"已解决"），或系统自动升级工单优先级
-     */
-    @SaCheckPermission("ticket:update")
-    @PutMapping("/tickets/{ticketId}")
-    public R<?> updateTicketStatus(@PathVariable("ticketId") Long ticketId,
-                                   @RequestBody TicketUpdateRequest ticketUpdateRequest){
-        ticketService.updateTicketStatus(ticketId,ticketUpdateRequest);
-        return R.success("工单状态更新成功");
+    @SaCheckPermission("ticket:query")
+    @GetMapping("/tickets/{ticketId}/messages")
+    public R<?> listMessages(@PathVariable Long ticketId) {
+        return R.success("工单消息查询成功", ticketService.getAccessibleMessages(ticketId));
     }
 
+    @SaCheckPermission("ticket:query")
+    @GetMapping("/tickets/{ticketId}/logs")
+    public R<?> listOperationLogs(@PathVariable Long ticketId) {
+        ticketService.requireViewableTicket(ticketId);
+        return R.success("工单操作日志查询成功", operationLogService.list(ticketId));
+    }
 
+    @SaCheckPermission("ticket:claim")
+    @PostMapping("/tickets/{ticketId}/claim")
+    public R<?> claim(@PathVariable Long ticketId) {
+        workflowService.claim(ticketId);
+        return R.success("接单成功");
+    }
 
+    @SaCheckPermission("ticket:assign")
+    @PutMapping("/tickets/{ticketId}/assignee")
+    public R<?> assign(@PathVariable Long ticketId, @Valid @RequestBody TicketAssignRequest request) {
+        workflowService.assign(ticketId, request);
+        return R.success("工单分配成功");
+    }
+
+    @SaCheckPermission("ticket:resolve")
+    @PostMapping("/tickets/{ticketId}/resolve")
+    public R<?> resolve(@PathVariable Long ticketId, @Valid @RequestBody TicketResolveRequest request) {
+        workflowService.resolve(ticketId, request);
+        return R.success("工单已标记为解决");
+    }
+
+    @SaCheckPermission("ticket:close")
+    @PostMapping("/tickets/{ticketId}/close")
+    public R<?> close(@PathVariable Long ticketId, @Valid @RequestBody TicketCloseRequest request) {
+        workflowService.close(ticketId, request);
+        return R.success("工单已关闭");
+    }
+
+    @SaCheckPermission("ticket:message")
+    @PostMapping("/tickets/{ticketId}/transfer-manual")
+    public R<?> transferToManual(@PathVariable Long ticketId) {
+        workflowService.transferToManual(ticketId);
+        return R.success("工单已转人工处理");
+    }
 }

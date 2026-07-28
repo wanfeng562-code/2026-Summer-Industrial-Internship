@@ -27,6 +27,8 @@ public class TicketVo {
     private Integer slaWarning;
     private Integer slaEscalated;
     private LocalDateTime slaDeadline;
+    private LocalDateTime resolveTime;
+    private LocalDateTime closeTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
     private List<TicketMessageVo> messages;

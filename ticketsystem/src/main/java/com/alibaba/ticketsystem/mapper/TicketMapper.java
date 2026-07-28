@@ -53,8 +53,33 @@ public interface TicketMapper extends BaseMapper<Ticket> {
 
 
     @Update("UPDATE ticket SET priority = #{priority}, update_time = NOW() WHERE id = #{ticketId} AND deleted = 0")
-    void updatePriorityById(@Param("ticketId") Long ticketId,
-                            @Param("priority") String priority);
+    int updatePriorityById(@Param("ticketId") Long ticketId,
+                           @Param("priority") String priority);
 
+    @Update("""
+            UPDATE ticket SET agent_id = #{agentId}, update_time = NOW()
+            WHERE id = #{ticketId} AND deleted = 0
+              AND status = 'MANUAL_REVIEW' AND agent_id IS NULL
+            """)
+    int claim(@Param("ticketId") Long ticketId, @Param("agentId") Long agentId);
 
+    @Update("""
+            UPDATE ticket SET agent_id = #{agentId}, update_time = NOW()
+            WHERE id = #{ticketId} AND deleted = 0 AND status = 'MANUAL_REVIEW'
+            """)
+    int assignAgent(@Param("ticketId") Long ticketId, @Param("agentId") Long agentId);
+
+    @Update("""
+            UPDATE ticket
+            SET status = #{toStatus},
+                resolve_time = COALESCE(#{resolveTime}, resolve_time),
+                close_time = COALESCE(#{closeTime}, close_time),
+                update_time = NOW()
+            WHERE id = #{ticketId} AND deleted = 0 AND status = #{fromStatus}
+            """)
+    int transitionStatus(@Param("ticketId") Long ticketId,
+                         @Param("fromStatus") String fromStatus,
+                         @Param("toStatus") String toStatus,
+                         @Param("resolveTime") java.time.LocalDateTime resolveTime,
+                         @Param("closeTime") java.time.LocalDateTime closeTime);
 }

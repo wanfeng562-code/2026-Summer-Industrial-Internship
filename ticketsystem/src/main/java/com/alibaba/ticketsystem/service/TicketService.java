@@ -1,10 +1,9 @@
 package com.alibaba.ticketsystem.service;
 import java.time.LocalDateTime;
 
-import cn.dev33.satoken.stp.StpUtil;
+import com.alibaba.ticketsystem.domain.TicketStatus;
 import com.alibaba.ticketsystem.dto.MessageRequest;
 import com.alibaba.ticketsystem.dto.TicketCreateRequest;
-import com.alibaba.ticketsystem.dto.TicketUpdateRequest;
 import com.alibaba.ticketsystem.entity.Orders;
 import com.alibaba.ticketsystem.entity.SysUser;
 import com.alibaba.ticketsystem.entity.TicketMessage;
@@ -19,8 +18,8 @@ import com.alibaba.ticketsystem.mapper.TicketMapper;
 import com.alibaba.ticketsystem.utils.ApiException;
 import com.alibaba.ticketsystem.vo.TicketVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,32 +29,21 @@ import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
-@Service   // 当前类是业务逻辑类   此类实例放入spring容器中
+@Service
+@RequiredArgsConstructor
 public class TicketService {
 
-    @Autowired
-    private TicketMapper ticketMapper;
-
-    @Autowired
-    private SysUserMapper sysUserMapper;
-
-    @Autowired
-    private OrdersMapper ordersMapper;
-
-    @Autowired
-    private TicketMessageMapper ticketMessageMapper;
-
-    @Autowired
-    private TicketMessageService ticketMessageService;
-
-    @Autowired
-    private AIService aiService;
-
-    @Autowired
-    private OrdersService ordersService;
-
-    @Autowired
-    private UserService userService;
+    private final TicketMapper ticketMapper;
+    private final SysUserMapper sysUserMapper;
+    private final OrdersMapper ordersMapper;
+    private final TicketMessageMapper ticketMessageMapper;
+    private final TicketMessageService ticketMessageService;
+    private final AIService aiService;
+    private final OrdersService ordersService;
+    private final UserService userService;
+    private final TicketOperationLogService operationLogService;
+    private final AfterSalePolicyService policyService;
+    private final AiProcessLogService aiProcessLogService;
 
     /** 工单状态中文名称映射 */
     private static final Map<String, String> STATUS_NAMES = Map.of(
@@ -71,11 +59,7 @@ public class TicketService {
 
     //工单详情
     public TicketVo getTicketDetail(Long ticketId){
-        Ticket ticket = ticketMapper.selectById(ticketId);
-        if(ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())){
-            throw new ApiException(HttpStatus.NOT_FOUND, "该工单不存在");
-        }
-        assertCanView(ticket, userService.requireCurrentUser());
+        Ticket ticket = requireViewableTicket(ticketId);
         return  convertToTicketVo(ticket);
     }
 
@@ -96,6 +80,8 @@ public class TicketService {
         ticketVo.setSlaWarning(ticket.getSlaWarning());
         ticketVo.setSlaEscalated(ticket.getSlaEscalated());
         ticketVo.setSlaDeadline(ticket.getSlaDeadline());
+        ticketVo.setResolveTime(ticket.getResolveTime());
+        ticketVo.setCloseTime(ticket.getCloseTime());
         ticketVo.setCreateTime(ticket.getCreateTime());
         ticketVo.setUpdateTime(ticket.getUpdateTime());
         ticketVo.setMessages(new ArrayList<TicketMessageVo>());
@@ -106,9 +92,11 @@ public class TicketService {
             ticketVo.setUserNickname(user.getNickname());
         }
 
-        SysUser agent = sysUserMapper.selectById(ticket.getAgentId());
-        if(agent != null){
-            ticketVo.setAgentName(agent.getNickname());
+        if (ticket.getAgentId() != null) {
+            SysUser agent = sysUserMapper.selectById(ticket.getAgentId());
+            if(agent != null){
+                ticketVo.setAgentName(agent.getNickname());
+            }
         }
 
         Orders orders = ordersMapper.selectById(ticket.getOrderId());
@@ -138,15 +126,15 @@ public class TicketService {
         //1.把当前工单对应的订单信息拿到
         Orders orders = ordersService.requireOwnedOrderForTicket(ticketCreateRequest.getOrderId());
 
-        //集成Sa-Token，获取当前登录用户ID
-        Long userId = StpUtil.getLoginIdAsLong();
+        SysUser currentUser = userService.requireCurrentUser();
+        Long userId = currentUser.getId();
 
         //2.如果问题分类为空，则AI判断问题的类型
         String category = ticketCreateRequest.getCategory();
         if(category == null || category.isBlank()){
             //调用AI，用description判断问题类型，等接入AI再完成
             category = aiService.classify(ticketCreateRequest.getDescription());
-            if("CONSULT".equals(category) || "COMPLAINT".equals(category)){
+            if (category == null || !CATEGORY_NAMES.containsKey(category)) {
                 category = "OTHER";
             }
         }
@@ -158,14 +146,19 @@ public class TicketService {
         ticket.setTitle(ticketCreateRequest.getTitle());
         ticket.setDescription(ticketCreateRequest.getDescription());
         ticket.setCategory(category);
-        ticket.setStatus("AI_PROCESSING");
+        ticket.setStatus(TicketStatus.AI_PROCESSING.name());
         String priority = ticketCreateRequest.getPriority();
-        ticket.setPriority(priority == null || priority.isBlank() ? "MEDIUM" : priority);
+        priority = priority == null || priority.isBlank() ? "MEDIUM" : priority;
+        ticket.setPriority(priority);
         ticket.setSlaWarning(0);
         ticket.setSlaEscalated(0);
-        ticket.setSlaDeadline(LocalDateTime.now().plusHours(2));  //要求2小时内响应完成
+        LocalDateTime createTime = LocalDateTime.now();
+        int slaHours = policyService.resolveSlaHours(
+                category, orders.getTotalAmount(), currentUser.getReputationScore(), priority);
+        ticket.setSlaDeadline(createTime.plusHours(slaHours));
         ticket.setDeleted(0);
-        ticket.setCreateTime(LocalDateTime.now());
+        ticket.setCreateTime(createTime);
+        ticket.setUpdateTime(createTime);
         ticketMapper.insert(ticket);
 
         //4.创建工单消息
@@ -178,9 +171,13 @@ public class TicketService {
         ticketMessage.setDeleted(0);
         ticketMessage.setCreateTime(LocalDateTime.now());
         ticketMessageMapper.insert(ticketMessage);
+        operationLogService.record(ticket.getId(), "CREATE", userId, currentUser.getRole(),
+                null, TicketStatus.AI_PROCESSING.name(),
+                "用户创建工单，SLA=" + slaHours + "小时");
 
         //5. AI处理工单
         //TODO: 调用AI处理工单  ticketId  UserId content (ticketCreateRequest.getDescription())
+        long aiStartedAt = System.currentTimeMillis();
         try{
             String reply = aiService.processTicket(ticket.getId(), ticketCreateRequest.getDescription(), userId);
             TicketMessage aiMsg = new TicketMessage();
@@ -192,17 +189,28 @@ public class TicketService {
             aiMsg.setDeleted(0);
             aiMsg.setCreateTime(LocalDateTime.now());
             ticketMessageMapper.insert(aiMsg);
-            ticket.setStatus("MANUAL_REVIEW");
+            aiProcessLogService.record(ticket.getId(), aiMsg.getId(), category,
+                    "AUTO_REPLY", reply, "创建工单后生成受控AI回复", aiStartedAt);
+            operationLogService.record(ticket.getId(), "AI_REPLY", null, "SYSTEM",
+                    TicketStatus.AI_PROCESSING.name(), TicketStatus.AI_PROCESSING.name(),
+                    "AI已生成回复并保存");
         } catch (Exception e) {
             log.error("AI processing failed for ticket {}", ticket.getId(), e);
-            ticket.setStatus("MANUAL_REVIEW");
+            aiProcessLogService.record(ticket.getId(), null, category,
+                    "TRANSFER_MANUAL", null, "AI服务不可用", aiStartedAt);
+            if (ticketMapper.transitionStatus(ticket.getId(), TicketStatus.AI_PROCESSING.name(),
+                    TicketStatus.MANUAL_REVIEW.name(), null, null) == 1) {
+                operationLogService.record(ticket.getId(), "AI_TRANSFER_MANUAL", null, "SYSTEM",
+                        TicketStatus.AI_PROCESSING.name(), TicketStatus.MANUAL_REVIEW.name(),
+                        "AI服务不可用，自动转人工");
+            }
         }
-        ticketMapper.updateById(ticket);
         //6. 返回工单信息
         return getTicketDetail(ticket.getId());
     }
 
     //添加工单消息/沟通消息
+    @Transactional
     public void addTicketMessage(Long ticketId, MessageRequest messageRequest){
         //1.拿到当前工单信息
         Ticket ticket = ticketMapper.selectById(ticketId);
@@ -227,11 +235,20 @@ public class TicketService {
         ticketMessage.setDeleted(0);
         ticketMessage.setCreateTime(LocalDateTime.now());
         ticketMessageMapper.insert(ticketMessage);
+        String beforeStatus = ticket.getStatus();
+        String afterStatus = beforeStatus;
 
-        //发送者是用户的话，则需要AI处理
-        if("USER".equals(senderType)){
+        if ("USER".equals(senderType) && TicketStatus.RESOLVED.name().equals(beforeStatus)) {
+            if (ticketMapper.transitionStatus(ticketId, TicketStatus.RESOLVED.name(),
+                    TicketStatus.MANUAL_REVIEW.name(), null, null) != 1) {
+                throw new ApiException(HttpStatus.CONFLICT, "工单状态已变化，请刷新后重试");
+            }
+            afterStatus = TicketStatus.MANUAL_REVIEW.name();
+        }
 
-            //TODO: 调用AI处理工单
+        // 只有仍处于 AI 处理阶段的用户消息才触发 AI；人工阶段由已接单客服处理。
+        if ("USER".equals(senderType) && TicketStatus.AI_PROCESSING.name().equals(beforeStatus)) {
+            long aiStartedAt = System.currentTimeMillis();
             try{
                 String reply = aiService.processTicket(ticket.getId(), messageRequest.getContent(), userId);
                 TicketMessage aiMsg = new TicketMessage();
@@ -243,48 +260,39 @@ public class TicketService {
                 aiMsg.setDeleted(0);
                 aiMsg.setCreateTime(LocalDateTime.now());
                 ticketMessageMapper.insert(aiMsg);
+                aiProcessLogService.record(ticket.getId(), aiMsg.getId(), ticket.getCategory(),
+                        "AUTO_REPLY", reply, "用户补充后生成受控AI回复", aiStartedAt);
+                operationLogService.record(ticket.getId(), "AI_REPLY", null, "SYSTEM",
+                        beforeStatus, beforeStatus, "AI已生成回复并保存");
             } catch (Exception e) {
                 log.error("AI processing failed for ticket {}", ticket.getId(), e);
+                aiProcessLogService.record(ticket.getId(), null, ticket.getCategory(),
+                        "TRANSFER_MANUAL", null, "AI服务不可用", aiStartedAt);
+                if (ticketMapper.transitionStatus(ticketId, TicketStatus.AI_PROCESSING.name(),
+                        TicketStatus.MANUAL_REVIEW.name(), null, null) == 1) {
+                    afterStatus = TicketStatus.MANUAL_REVIEW.name();
+                    operationLogService.record(ticketId, "AI_TRANSFER_MANUAL", null, "SYSTEM",
+                            beforeStatus, afterStatus, "AI服务不可用，自动转人工");
+                }
             }
-            ticket.setStatus("AI_PROCESSING");
-            ticketMapper.updateById(ticket);
         }
 
-        //发送者是客服和管理，则工单状态变为 人工复核
-        if("AGENT".equals(senderType) || "ADMIN".equals(senderType)){
-            ticket.setStatus("MANUAL_REVIEW");
-            ticketMapper.updateById(ticket);
-        }
-
+        operationLogService.record(ticketId, "MESSAGE_ADD", userId, senderType,
+                beforeStatus, afterStatus, "发送工单消息");
     }
 
-    //修改工单的状态
-    public void updateTicketStatus(Long ticketId, TicketUpdateRequest ticketUpdateRequest){
-        //1.拿到当前工单信息
+    public List<TicketMessageVo> getAccessibleMessages(Long ticketId) {
+        requireViewableTicket(ticketId);
+        return ticketMessageService.getTicketMessageList(ticketId);
+    }
+
+    public Ticket requireViewableTicket(Long ticketId) {
         Ticket ticket = ticketMapper.selectById(ticketId);
-        if(ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())){
+        if (ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())) {
             throw new ApiException(HttpStatus.NOT_FOUND, "该工单不存在");
         }
-
-        SysUser currentUser = userService.requireCurrentUser();
-        assertCanUpdate(ticket, currentUser, ticketUpdateRequest);
-
-        if(ticketUpdateRequest.getStatus() != null && !ticketUpdateRequest.getStatus().isBlank()){
-            ticket.setStatus(ticketUpdateRequest.getStatus());
-        }
-
-        if(ticketUpdateRequest.getCategory() != null && !ticketUpdateRequest.getCategory().isBlank()){
-            ticket.setCategory(ticketUpdateRequest.getCategory());
-        }
-
-        if(ticketUpdateRequest.getPriority() != null && !ticketUpdateRequest.getPriority().isBlank()){
-            ticket.setPriority(ticketUpdateRequest.getPriority());
-        }
-
-        if(ticketUpdateRequest.getAgentId() != null && ticketUpdateRequest.getAgentId() != 0){
-            ticket.setAgentId(ticketUpdateRequest.getAgentId());
-        }
-        ticketMapper.updateById(ticket);
+        assertCanView(ticket, userService.requireCurrentUser());
+        return ticket;
     }
 
     private void assertCanView(Ticket ticket, SysUser currentUser) {
@@ -309,7 +317,9 @@ public class TicketService {
         if ("USER".equals(currentUser.getRole()) && ticket.getUserId().equals(currentUser.getId())) {
             return;
         }
-        if ("AGENT".equals(currentUser.getRole()) && currentUser.getId().equals(ticket.getAgentId())) {
+        if ("AGENT".equals(currentUser.getRole())
+                && TicketStatus.MANUAL_REVIEW.name().equals(ticket.getStatus())
+                && currentUser.getId().equals(ticket.getAgentId())) {
             return;
         }
         if ("ADMIN".equals(currentUser.getRole())) {
@@ -318,18 +328,4 @@ public class TicketService {
         throw new ApiException(HttpStatus.FORBIDDEN, "无权向该工单发送消息");
     }
 
-    private void assertCanUpdate(Ticket ticket, SysUser currentUser, TicketUpdateRequest request) {
-        if ("ADMIN".equals(currentUser.getRole())) {
-            return;
-        }
-        if (!"AGENT".equals(currentUser.getRole())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "当前角色无权更新工单");
-        }
-        if (ticket.getAgentId() != null && !ticket.getAgentId().equals(currentUser.getId())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "该工单已由其他客服处理");
-        }
-        if (request.getAgentId() != null && !request.getAgentId().equals(currentUser.getId())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "客服只能将工单分配给自己");
-        }
-    }
 }

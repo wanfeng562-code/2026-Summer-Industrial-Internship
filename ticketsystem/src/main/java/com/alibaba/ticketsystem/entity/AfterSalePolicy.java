@@ -81,6 +81,11 @@ public class AfterSalePolicy implements Serializable {
     private Integer enabled;
 
     /**
+     * 命中该策略时的 SLA 时长（小时），为空时使用优先级默认值。
+     */
+    private Integer slaHours;
+
+    /**
      * 逻辑删除
      */
     private Integer deleted;

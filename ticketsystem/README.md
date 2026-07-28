@@ -1,6 +1,6 @@
 # 工单管理系统后端
 
-本目录以老师 2026-07-28 的后端快照为基线。当前已落地成员 A 负责的统一响应、账号认证、角色权限、订单数据范围和创建工单前的订单归属校验。
+本目录以老师 2026-07-28 的后端快照为基线。当前已落地成员 A 的认证、权限和订单数据范围，以及成员 C 的工单状态机、操作日志、策略/SLA、FAQ、受控 AI 上下文、普通对话与 SSE 接口。
 
 ## 1. 运行环境
 
@@ -17,7 +17,8 @@
 2. `src/main/resources/static/data.sql`：导入演示账号、订单、工单和策略。
 
 已有老师早期数据库且账号密码仍为明文 `123456` 时，只执行
-`src/main/resources/static/migrate_legacy_passwords.sql`。该脚本仅迁移指定演示账号，不覆盖已经修改的密码。
+`src/main/resources/static/migrate_legacy_passwords.sql`。在已有 7-28/A 数据库上继续开发时，再执行
+`src/main/resources/static/migrate_member_c_workflow.sql`；该脚本保留现有业务数据，增加工单操作日志、策略 SLA 字段和 FAQ 表。
 
 演示账号密码均为 `123456`：
 
@@ -65,7 +66,7 @@ $env:DASHSCOPE_API_KEY = "你的DashScopeKey"
 .\mvnw.cmd package
 ```
 
-当前成员 A 的单元测试不连接 MySQL，也不调用 DashScope，可重复运行且不会修改开发数据。
+当前自动化测试不连接 MySQL，也不调用 DashScope，可重复运行且不会修改开发数据。真实模型验收需要本地环境变量和可用网络。
 
 ## 5. 前后端联调
 
@@ -85,5 +86,9 @@ Authorization: Bearer <token>
 }
 ```
 
-接口说明见仓库根目录 `docs/成员A认证订单接口说明.md`，可导入的请求集合见
-`docs/postman/成员A认证订单接口.postman_collection.json`。
+接口说明：
+
+- `docs/成员A认证订单接口说明.md`
+- `docs/成员C工单策略AI接口说明.md`
+
+可导入的认证/订单请求集合见 `docs/postman/成员A认证订单接口.postman_collection.json`。

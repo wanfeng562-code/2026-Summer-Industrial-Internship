@@ -43,8 +43,8 @@ public class OrdersController {
     @SaCheckPermission("order:query")
     //实现订单分页列表查询
     @GetMapping("/orders/{page}/{pageSize}")
-    public R<?> pageOrders(@PathVariable("page") Integer page,
-                                      @PathVariable("pageSize") Integer pageSize){
+    public R<?> pageOrdersLegacy(@PathVariable("page") Integer page,
+                                 @PathVariable("pageSize") Integer pageSize){
         Page<Orders> po = ordersService.pageOrders(page, pageSize);
         return R.success("订单分页查询成功", po);
     }

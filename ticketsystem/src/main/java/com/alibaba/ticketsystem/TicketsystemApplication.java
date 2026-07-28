@@ -4,7 +4,9 @@ import cn.dev33.satoken.SaManager;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
+@EnableScheduling
 @SpringBootApplication
 @MapperScan("com.alibaba.ticketsystem.mapper") //配置映射器扫描器
 public class TicketsystemApplication {

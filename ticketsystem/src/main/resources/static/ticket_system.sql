@@ -110,6 +110,26 @@ CREATE TABLE `ticket_message` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单消息表';
 
 -- -------------------------------------------
+-- 工单操作日志表
+-- -------------------------------------------
+DROP TABLE IF EXISTS `ticket_operation_log`;
+CREATE TABLE `ticket_operation_log` (
+                                        `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '日志ID',
+                                        `ticket_id` BIGINT NOT NULL COMMENT '工单ID',
+                                        `action` VARCHAR(40) NOT NULL COMMENT '动作代码',
+                                        `operator_id` BIGINT DEFAULT NULL COMMENT '操作人ID，系统操作为空',
+                                        `operator_role` VARCHAR(20) NOT NULL COMMENT '操作人角色: USER/AGENT/ADMIN/SYSTEM',
+                                        `before_status` VARCHAR(30) DEFAULT NULL COMMENT '变更前状态',
+                                        `after_status` VARCHAR(30) DEFAULT NULL COMMENT '变更后状态',
+                                        `detail` VARCHAR(2000) DEFAULT NULL COMMENT '必要说明',
+                                        `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+                                        PRIMARY KEY (`id`),
+                                        KEY `idx_ticket_id` (`ticket_id`),
+                                        KEY `idx_operator_id` (`operator_id`),
+                                        KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单操作日志表';
+
+-- -------------------------------------------
 -- 售后策略表
 -- -------------------------------------------
 DROP TABLE IF EXISTS `after_sale_policy`;
@@ -125,6 +145,7 @@ CREATE TABLE `after_sale_policy` (
                                      `reply_template` TEXT DEFAULT NULL COMMENT '回复模板',
                                      `priority` INT NOT NULL DEFAULT 0 COMMENT '优先级(越小越优先)',
                                      `enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '启用状态: 0-禁用 1-启用',
+                                     `sla_hours` INT DEFAULT NULL COMMENT '命中策略后的SLA时长（小时）',
                                      `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
                                      `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                                      `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -132,6 +153,25 @@ CREATE TABLE `after_sale_policy` (
                                      KEY `idx_category` (`category`),
                                      KEY `idx_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='售后策略表';
+
+-- -------------------------------------------
+-- FAQ知识库表
+-- -------------------------------------------
+DROP TABLE IF EXISTS `faq`;
+CREATE TABLE `faq` (
+                       `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'FAQ ID',
+                       `category` VARCHAR(30) NOT NULL COMMENT '分类: REFUND/LOGISTICS/DAMAGE/INVOICE/OTHER',
+                       `question` VARCHAR(500) NOT NULL COMMENT '常见问题',
+                       `answer` TEXT NOT NULL COMMENT '标准答案',
+                       `keywords` VARCHAR(500) DEFAULT NULL COMMENT '检索关键词，逗号分隔',
+                       `enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '启用状态: 0-禁用 1-启用',
+                       `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+                       `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                       `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                       PRIMARY KEY (`id`),
+                       KEY `idx_category` (`category`),
+                       KEY `idx_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='FAQ知识库表';
 
 -- -------------------------------------------
 -- AI处理日志表

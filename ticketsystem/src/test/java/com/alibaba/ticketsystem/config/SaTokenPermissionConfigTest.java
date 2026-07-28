@@ -19,7 +19,7 @@ class SaTokenPermissionConfigTest {
 
         assertThat(config.getRoleList(4L, "login")).containsExactly("USER");
         assertThat(config.getPermissionList(4L, "login"))
-                .contains("order:query", "ticket:query", "ticket:add", "ticket:message")
+                .contains("order:query", "ticket:query", "ticket:add", "ticket:message", "faq:query")
                 .doesNotContain("order:query:all", "ticket:update", "user:manage");
     }
 
@@ -28,7 +28,8 @@ class SaTokenPermissionConfigTest {
         when(userMapper.selectById(1L)).thenReturn(user("ADMIN"));
 
         assertThat(config.getPermissionList(1L, "login"))
-                .contains("order:query:all", "ticket:update", "user:manage", "policy:manage");
+                .contains("order:query:all", "ticket:assign", "ticket:resolve",
+                        "ticket:close", "user:manage", "policy:manage", "faq:manage");
     }
 
     @Test
