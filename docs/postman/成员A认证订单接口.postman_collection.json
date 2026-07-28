@@ -1,0 +1,246 @@
+{
+  "info": {
+    "_postman_id": "85c0c262-3f1e-4be5-96e2-6b27c5c8c9c7",
+    "name": "工单系统-成员A认证与订单接口",
+    "description": "2026-07-28 基线。登录后自动保存 token；默认使用 user_wang / 123456。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": "1"
+    },
+    {
+      "key": "ticketId",
+      "value": "1"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "认证与账号",
+      "item": [
+        {
+          "name": "登录并保存Token",
+          "auth": {
+            "type": "noauth"
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user_wang\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/user/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('登录成功', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql(200);",
+                  "  pm.collectionVariables.set('token', json.data.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "注册普通用户",
+          "auth": {
+            "type": "noauth"
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"postman_user\",\n  \"password\": \"123456\",\n  \"nickname\": \"Postman用户\",\n  \"email\": \"postman@example.com\",\n  \"phone\": \"13900000000\"\n}"
+            },
+            "url": "{{baseUrl}}/user/register"
+          }
+        },
+        {
+          "name": "查询个人资料",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/user/profile"
+          }
+        },
+        {
+          "name": "修改个人资料",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nickname\": \"王小明\",\n  \"email\": \"wang@user.com\",\n  \"phone\": \"13900000001\",\n  \"avatar\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/user/profile"
+          }
+        },
+        {
+          "name": "退出登录",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/user/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "订单与归属",
+      "item": [
+        {
+          "name": "订单分页",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/orders?current=1&size=10"
+          }
+        },
+        {
+          "name": "订单详情",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "为本人订单创建工单",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": {{orderId}},\n  \"title\": \"商品存在质量问题\",\n  \"description\": \"收到商品后发现明显划痕，希望尽快处理。\",\n  \"category\": \"DAMAGE\",\n  \"priority\": \"HIGH\"\n}"
+            },
+            "url": "{{baseUrl}}/tickets"
+          }
+        },
+        {
+          "name": "补充工单消息",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"这里补充一张商品破损照片。\"\n}"
+            },
+            "url": "{{baseUrl}}/tickets/{{ticketId}}/messages"
+          }
+        }
+      ]
+    },
+    {
+      "name": "管理员",
+      "item": [
+        {
+          "name": "用户分页（需管理员Token）",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users?current=1&size=10&role=USER"
+          }
+        }
+      ]
+    },
+    {
+      "name": "异常场景",
+      "item": [
+        {
+          "name": "无Token访问订单-期望401",
+          "auth": {
+            "type": "noauth"
+          },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/orders?current=1&size=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('返回401统一响应', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().code).to.eql(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "访问他人订单-期望403",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/orders/2"
+          }
+        },
+        {
+          "name": "以他人订单创建工单-期望403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 2,\n  \"title\": \"越权测试\",\n  \"description\": \"普通用户不得为其他用户的订单创建工单。\",\n  \"category\": \"OTHER\",\n  \"priority\": \"MEDIUM\"\n}"
+            },
+            "url": "{{baseUrl}}/tickets"
+          }
+        }
+      ]
+    }
+  ]
+}
