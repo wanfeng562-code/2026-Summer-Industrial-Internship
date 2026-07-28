@@ -17,13 +17,13 @@ export interface Page<T>{
 
 //定义TicketVo类的接口
 export interface TicketVo{
-    id?: number
+    id: number
     ticketNo: string
     userId: number
     username: string
     userNickname: string
-    agentId:number
-    agentName:string
+    agentId:number | null
+    agentName:string | null
     orderId:number
     orderNo:string
     title: string
@@ -36,6 +36,8 @@ export interface TicketVo{
     slaWarning:number
     slaEscalated:number
     slaDeadline:string
+    resolveTime:string | null
+    closeTime:string | null
     createTime:string
     updateTime:string
     messages:Array<TicketMessageVo>
@@ -79,14 +81,22 @@ export interface Orders {
 
 //定义创建工单表单
 export interface TicketCreateRequest{
-    ordersId:number
+    orderId:number
     title:string
     description:string
     category:string
+    priority?:string
 }
 
 export interface MessageRequest{
-    ticketId:number
     content:string
+}
+
+export interface TicketResolveRequest {
+    content:string
+}
+
+export interface TicketCloseRequest {
+    reason:string
 }
 

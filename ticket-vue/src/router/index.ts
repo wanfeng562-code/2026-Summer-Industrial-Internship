@@ -42,6 +42,18 @@ const router = createRouter({
           component: ()=> import("../views/tickets/TicketDetail.vue"),   //工单详情
           meta:{"title" : "工单详情"}
         },
+        {
+          path : "chat",
+          name:"ai-chat",
+          component: ()=> import("../views/ai/ChatView.vue"),
+          meta:{"title" : "AI客服"}
+        },
+        {
+          path : "policies",
+          name:"policies",
+          component: ()=> import("../views/policies/PolicyView.vue"),
+          meta:{"title" : "售后策略", "roles": ["ADMIN"]}
+        },
       ]
     },
     {

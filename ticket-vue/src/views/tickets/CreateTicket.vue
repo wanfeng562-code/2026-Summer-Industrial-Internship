@@ -1,27 +1,28 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 const formRef = ref<FormInstance>()
 
 import { requestOrdersList, requestCreateTicket } from '@/api/ticket'   // @/   src目录下  
-import type {R, Page, Orders, TicketVo} from '@/api/ticket/type'
+import type { Orders } from '@/api/ticket/type'
 
 const loading = ref(false)
 const router = useRouter()
+const route = useRoute()
 
 const orderData = ref<Array<Orders>>([])
 
 const form = reactive({
-  ordersId: null as number | null,
+  orderId: null as number | null,
   title: '',
   description: '',
   category: ''
 })
 
 const rules = {
-  ordersId: [{ required: true, message: '请选择关联订单', trigger: 'change' }],
+  orderId: [{ required: true, message: '请选择关联订单', trigger: 'change' }],
   title: [{ required: true, message: '请输入工单标题', trigger: 'blur' }],
   description: [{ required: true, message: '请输入问题描述', trigger: 'blur' }]
 }
@@ -35,13 +36,16 @@ const categoryOptions = [
 ]
 
 onMounted(async () => {
+  if (typeof route.query.description === 'string') {
+    form.description = route.query.description.slice(0, 2000)
+    form.title = route.query.description.slice(0, 100)
+  }
   listOrders()
 })
 
 const listOrders = async () =>{
   try{
     const res = await requestOrdersList()
-    console.log(res)
     if(res.code == 200){
       orderData.value = res.data.records
     }
@@ -53,13 +57,16 @@ const listOrders = async () =>{
 
 const handleSubmit = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || form.orderId === null) return
 
   loading.value = true
   try {
-    console.log("开始创建工单")
-    console.log(form)
-    const res = await requestCreateTicket(form)
+    const res = await requestCreateTicket({
+      orderId: form.orderId,
+      title: form.title,
+      description: form.description,
+      category: form.category,
+    })
     if(res.code == 200){
       ElMessage.success('工单创建成功')
       router.push('/home/tickets')
@@ -80,8 +87,8 @@ const handleSubmit = async () => {
         <span>创建工单</span>
       </template>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" style="max-width: 700px;">
-        <el-form-item label="关联订单" prop="ordersId">
-          <el-select v-model="form.ordersId"  placeholder="请选择关联订单" filterable style="width: 100%;">
+        <el-form-item label="关联订单" prop="orderId">
+          <el-select v-model="form.orderId" placeholder="请选择关联订单" filterable style="width: 100%;">
             <el-option v-for="item in orderData" :key="item.id" :value="item.id" :label="`${item.orderNo} - ${item.productName} (¥${item.totalAmount})`" />
           </el-select>
         </el-form-item>

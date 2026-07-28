@@ -1,11 +1,14 @@
 import request from "@/utils/request";
-import type {R, Page, TicketVo, TicketMessageVo, Orders, TicketCreateRequest, MessageRequest} from './type'
+import type {
+    R, Page, TicketVo, Orders, TicketCreateRequest, MessageRequest,
+    TicketResolveRequest, TicketCloseRequest
+} from './type'
 
 //定义登录的URL
 enum API{
     TICKET_PAGE = "/tickets",
     TICKET_DETAIL = "/tickets",
-    ORDER_LIST = "/orders/1/6",
+    ORDER_LIST = "/orders",
     CREATE_TICKET = "/tickets",
 }
 
@@ -21,7 +24,7 @@ export const requestTicketDetail = (ticketId:number)=>{
 
 //发送订单列表请求接口
 export const requestOrdersList = ()=>{
-    return request.get<any, R<Orders>>(API.ORDER_LIST)
+    return request.get<any, R<Page<Orders>>>(`${API.ORDER_LIST}?current=1&size=100`)
 }
 
 //创建工单请求接口
@@ -32,4 +35,20 @@ export const requestCreateTicket = (data : TicketCreateRequest)=>{
 //创建发送工单消息请求接口
 export const requestAddTicketMsg =(ticketId:number, data:MessageRequest)=>{
     return request.post<any, R<null>>(`${API.CREATE_TICKET}/${ticketId}/messages`, data)
+}
+
+export const requestClaimTicket = (ticketId:number)=>{
+    return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/claim`)
+}
+
+export const requestResolveTicket = (ticketId:number, data:TicketResolveRequest)=>{
+    return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/resolve`, data)
+}
+
+export const requestCloseTicket = (ticketId:number, data:TicketCloseRequest)=>{
+    return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/close`, data)
+}
+
+export const requestTransferManual = (ticketId:number)=>{
+    return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/transfer-manual`)
 }
