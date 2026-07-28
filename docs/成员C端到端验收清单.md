@@ -6,7 +6,8 @@
 
 - [ ] 已执行成员 C 数据库迁移，`ticket_operation_log`、`faq` 和 `after_sale_policy.sla_hours` 存在。
 - [ ] 后端使用本机 `DB_PASSWORD` 启动；AI 用例另配置本机 `DASHSCOPE_API_KEY`。
-- [ ] 前端 Node 版本满足 `package.json`，`npm run build` 通过。
+- [ ] 前端 Node 版本满足 `package.json`（当前 `22.13.1` 仍需升级）。
+- [x] 已执行 `npm ci`，且 `npm run build` 通过（2026-07-28）。
 - [ ] USER、AGENT、ADMIN 三类账号均可登录，浏览器请求携带 Bearer Token。
 - [ ] 准备两个不同普通用户及各自订单，用于验证越权隔离。
 
