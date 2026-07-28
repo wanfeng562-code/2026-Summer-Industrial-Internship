@@ -1,6 +1,6 @@
 import request from "@/utils/request";
 import type {
-    R, Page, TicketVo, Orders, TicketCreateRequest, MessageRequest,
+    R, Page, TicketVo, Orders, OrderVo, TicketCreateRequest, MessageRequest,
     TicketResolveRequest, TicketCloseRequest
 } from './type'
 
@@ -13,8 +13,8 @@ enum API{
 }
 
 //发送工单分页列表请求接口
-export const requestTicketPage = (current:number)=>{
-    return request.get<any, R<Page<TicketVo>>>(`${API.TICKET_PAGE}?current=${current}&size=3`)
+export const requestTicketPage = (current:number, size = 10)=>{
+    return request.get<any, R<Page<TicketVo>>>(`${API.TICKET_PAGE}?current=${current}&size=${size}`)
 }
 
 //发送工单详情请求接口
@@ -23,8 +23,12 @@ export const requestTicketDetail = (ticketId:number)=>{
 }
 
 //发送订单列表请求接口
-export const requestOrdersList = ()=>{
-    return request.get<any, R<Page<Orders>>>(`${API.ORDER_LIST}?current=1&size=100`)
+export const requestOrdersList = (current = 1, size = 10)=>{
+    return request.get<any, R<Page<Orders>>>(`${API.ORDER_LIST}?current=${current}&size=${size}`)
+}
+
+export const requestOrderDetail = (id:number)=>{
+    return request.get<any, R<OrderVo>>(`${API.ORDER_LIST}/${id}`)
 }
 
 //创建工单请求接口

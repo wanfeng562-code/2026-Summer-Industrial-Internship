@@ -11,6 +11,7 @@ export interface Page<T>{
     total:number
     size:number
     current:number
+    pages?:number
     records:Array<T>
 }
 
@@ -59,7 +60,7 @@ export interface TicketMessageVo {
 
 //定义订单信息
 export interface Orders {
-  id?: number
+  id:number
   orderNo:string
   userId:number
   productName:string
@@ -69,14 +70,18 @@ export interface Orders {
   orderStatus:string
   paymentStatus:string
   logisticsStatus:string
-  logisticsNo:string
+  logisticsNo:string | null
   orderTime:string
-  payTime:string
-  deliverTime:string
-  receiveTime:string
-  deleted:number
-  createTime:string
-  updateTime:string
+  payTime:string | null
+  deliverTime:string | null
+  receiveTime:string | null
+  deleted?:number
+  createTime?:string
+  updateTime?:string
+}
+
+export interface OrderVo extends Orders {
+  username?:string
 }
 
 //定义创建工单表单
@@ -84,7 +89,7 @@ export interface TicketCreateRequest{
     orderId:number
     title:string
     description:string
-    category:string
+    category?:string
     priority?:string
 }
 

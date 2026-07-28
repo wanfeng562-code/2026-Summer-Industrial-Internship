@@ -1,18 +1,31 @@
-import request from "@/utils/request";
-import type {R, UserInfo, LoginRequest} from './type'
+import request from '@/utils/request'
+import type {
+  R,
+  UserInfo,
+  UserProfile,
+  LoginRequest,
+  RegisterRequest,
+  ProfileUpdateRequest,
+} from './type'
 
-//定义登录的URL
-enum API{
-    LOGIN_URL = "/user/login",
-    LOGOUT_URL = "/user/logout"
+enum API {
+  LOGIN_URL = '/user/login',
+  LOGOUT_URL = '/user/logout',
+  REGISTER_URL = '/user/register',
+  PROFILE_URL = '/user/profile',
 }
 
-//发送用户登录请求接口
-export const requestLogin = (data : LoginRequest)=>{
-    return request.post<any, R<UserInfo>>(API.LOGIN_URL, data)
-}
+export const requestLogin = (data: LoginRequest) =>
+  request.post<any, R<UserInfo>>(API.LOGIN_URL, data)
 
-//发送用户退出请求接口
-export const requestLogout = ()=>{
-    return request.get<any, R<null>>(API.LOGOUT_URL)
-}
+export const requestLogout = () =>
+  request.post<any, R<null>>(API.LOGOUT_URL)
+
+export const requestRegister = (data: RegisterRequest) =>
+  request.post<any, R<UserProfile>>(API.REGISTER_URL, data)
+
+export const requestProfile = () =>
+  request.get<any, R<UserProfile>>(API.PROFILE_URL)
+
+export const requestUpdateProfile = (data: ProfileUpdateRequest) =>
+  request.put<any, R<UserProfile>>(API.PROFILE_URL, data)

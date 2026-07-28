@@ -1,57 +1,50 @@
-import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 
-export const useUserInfoStore = defineStore('userInfo', {
+export interface UserState {
+  userId: number
+  username: string
+  nickname: string
+  token: string
+  roles: string[]
+  permissions: string[]
+}
 
-  state:()=>{
-    return {
-      user:{
-        userId:0,
-        username:"",
-        realName:"",
-        token:"",
-        roles:Array<string>(),
-        permissions:Array<string>()
-      }
-    }
-  },
+const emptyUser = (): UserState => ({
+  userId: 0,
+  username: '',
+  nickname: '',
+  token: '',
+  roles: [],
+  permissions: [],
+})
+
+export const useUserInfoStore = defineStore('userInfo', {
+  state: () => ({
+    user: emptyUser(),
+  }),
   getters: {
+    isLogin: (state) => Boolean(state.user.token),
     getUserId: (state) => state.user.userId,
     getUsername: (state) => state.user.username,
-    getRealName: (state) => state.user.realName,
+    getNickname: (state) => state.user.nickname,
+    getRealName: (state) => state.user.nickname,
     getToken: (state) => state.user.token,
     getRoles: (state) => state.user.roles,
     getPermissions: (state) => state.user.permissions,
+    isAdmin: (state) => state.user.roles.includes('ADMIN'),
+    isAgent: (state) => state.user.roles.includes('AGENT'),
+    isUser: (state) => state.user.roles.includes('USER'),
   },
   actions: {
-    setUserId(userId : number){
-        this.user.userId = userId
-      },
-    setUsername(username : string){
-      this.user.username = username
+    setUser(payload: Partial<UserState>) {
+      this.user = { ...this.user, ...payload }
     },
-    setRealName(realName : string){
-      this.user.realName = realName
-    },
-    setToken(token : string){
-      this.user.token = token
-    },
-    setRoles(roles : Array<string>){
-      this.user.roles = roles
-    },
-    setPermissions(permissions : Array<string>){
-      this.user.permissions = permissions
+    clearUser() {
+      this.user = emptyUser()
     },
   },
-  persist:{
-    enabled:true, // 需要开启才可以持久化
-    strategies:[
-      {
-        key:"user", // 自定义缓存的key
-        paths:["user"], // 默认会缓存所有state数据，可以指定名称进行缓存
-        storage:window.localStorage // 缓存地址
-      }
-    ]
-  }
-
+  persist: {
+    key: 'user',
+    pick: ['user'],
+  },
 })

@@ -1,53 +1,45 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { useUserInfoStore } from '@/stores/userInfo'
 
 const route = useRoute()
-const router = useRouter()
+const stores = useUserInfoStore()
 
+const menus = computed(() => {
+  const roles = stores.user.roles
+  const all = [
+    { path: '/home', title: '工作台', icon: 'Odometer', roles: ['USER', 'AGENT', 'ADMIN'] },
+    { path: '/home/tickets', title: '工单管理', icon: 'Document', roles: ['USER', 'AGENT', 'ADMIN'] },
+    { path: '/home/create', title: '创建工单', icon: 'Plus', roles: ['USER'] },
+    { path: '/home/orders', title: '订单管理', icon: 'ShoppingCart', roles: ['USER', 'ADMIN'] },
+    { path: '/home/policies', title: '售后策略', icon: 'Setting', roles: ['ADMIN'] },
+    { path: '/home/chat', title: 'AI客服', icon: 'ChatDotRound', roles: ['USER', 'AGENT', 'ADMIN'] },
+  ]
+  return all.filter((menu) => menu.roles.some((role) => roles.includes(role)))
+})
 </script>
 
 <template>
-    <el-aside class="aside">
+  <el-aside class="aside">
     <div class="logo">
-        <el-icon size="24"><Service /></el-icon>
-        <span class="logo-text">工单管理系统</span>
-      </div>
+      <el-icon size="24"><Service /></el-icon>
+      <span class="logo-text">工单管理系统</span>
+    </div>
     <el-menu
-        :default-active="route.path"
-        router
-        class="el-menu-vertical-demo"
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409eff"
-        :collapse-transition="false"
-      >
-        <el-menu-item index="/home">
-          <el-icon><Odometer /></el-icon>
-          <template #title>工作台</template>
-        </el-menu-item>
-        <el-menu-item index="/home/tickets">
-          <el-icon><Document /></el-icon>
-          <template #title>工单管理</template>
-        </el-menu-item>
-        <el-menu-item index="/home/create">
-          <el-icon><Plus /></el-icon>
-          <template #title>创建工单</template>
-        </el-menu-item>
-        <el-menu-item index="/home/orders">
-          <el-icon><ShoppingCart /></el-icon>
-          <template #title>订单管理</template>
-        </el-menu-item>
-        <el-menu-item index="/home/policies">
-          <el-icon><Setting /></el-icon>
-          <template #title>售后策略</template>
-        </el-menu-item>
-        <el-menu-item index="/home/chat">
-          <el-icon><ChatDotRound /></el-icon>
-          <template #title>AI客服</template>
-        </el-menu-item>
-      </el-menu>
-    </el-aside>
+      :default-active="route.path"
+      router
+      background-color="#304156"
+      text-color="#bfcbd9"
+      active-text-color="#409eff"
+      :collapse-transition="false"
+    >
+      <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
+        <el-icon><component :is="item.icon" /></el-icon>
+        <template #title>{{ item.title }}</template>
+      </el-menu-item>
+    </el-menu>
+  </el-aside>
 </template>
 
 <style scoped>
@@ -55,7 +47,9 @@ const router = useRouter()
   background-color: #304156;
   transition: width 0.3s;
   overflow: hidden;
+  min-height: 100vh;
 }
+
 .logo {
   height: 60px;
   display: flex;
@@ -65,12 +59,13 @@ const router = useRouter()
   color: #fff;
   font-size: 16px;
   font-weight: bold;
-  cursor: pointer;
   border-bottom: 1px solid #3a4a5c;
 }
+
 .logo-text {
   white-space: nowrap;
 }
+
 .el-menu {
   border-right: none;
 }

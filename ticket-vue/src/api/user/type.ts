@@ -1,23 +1,49 @@
-
-//定义R类接口
-export interface R<T>{
-    code:number
-    msg:string
-    data:T
+export interface R<T> {
+  code: number
+  msg: string
+  data: T
 }
 
-//定义UserInfo接口
-export interface UserInfo{
-    userId:number
-    username:string
-    nickname:string
-    token:string
-    roles:Array<string>
-    permissions:Array<string>
+export interface UserInfo {
+  id?: number
+  userId: number
+  username: string
+  nickname: string
+  token: string
+  role?: string
+  roles: string[]
+  permissions: string[]
 }
 
-//定义提交LoginRequest接口
-export interface LoginRequest{
-    username:string
-    password:string
+export interface UserProfile {
+  id: number
+  username: string
+  nickname: string
+  email: string | null
+  phone: string | null
+  avatar: string | null
+  role: string
+  reputationScore: number
+  createTime: string
+  updateTime: string
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface RegisterRequest {
+  username: string
+  password: string
+  nickname: string
+  email?: string
+  phone?: string
+}
+
+export interface ProfileUpdateRequest {
+  nickname: string
+  email?: string
+  phone?: string
+  avatar?: string
 }

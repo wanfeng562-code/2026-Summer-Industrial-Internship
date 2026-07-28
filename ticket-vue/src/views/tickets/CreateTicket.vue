@@ -40,7 +40,12 @@ onMounted(async () => {
     form.description = route.query.description.slice(0, 2000)
     form.title = route.query.description.slice(0, 100)
   }
-  listOrders()
+  const queryOrderId = route.query.orderId ?? route.query.ordersId
+  if (typeof queryOrderId === 'string') {
+    const id = Number(queryOrderId)
+    if (Number.isFinite(id)) form.orderId = id
+  }
+  await listOrders()
 })
 
 const listOrders = async () =>{
@@ -69,7 +74,7 @@ const handleSubmit = async () => {
     })
     if(res.code == 200){
       ElMessage.success('工单创建成功')
-      router.push('/home/tickets')
+      router.push(`/home/tickets/${res.data.id}`)
     }else{
       ElMessage.error('工单创建失败')
     }

@@ -1,64 +1,76 @@
-import axios from "axios"  //导入axios
+import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { useUserInfoStore } from '@/stores/userInfo';
-const stores = useUserInfoStore();
+import router from '@/router'
+import { useUserInfoStore } from '@/stores/userInfo'
 
-  //第一步:创建axios实例
 const request = axios.create({
   baseURL: '/api',
-  timeout: 10000,
-  headers: {'Content-Type': 'application/json;charset=utf-8'}
-});
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json;charset=utf-8' },
+})
 
-//第二步:request实例添加请求拦截器
-request.interceptors.request.use((config:any) => {
-  //获取用户相关的小仓库:获取仓库内部token,登录成功以后携带给服务器
-  const token = stores.user.token
-  if (token) {
-    config.headers.Authorization = "Bearer " + token
+request.interceptors.request.use((config) => {
+  const stores = useUserInfoStore()
+  if (stores.user.token) {
+    config.headers.Authorization = `Bearer ${stores.user.token}`
   }
-  //config配置对象,headers属性请求头,经常给服务器端携带公共参数
-  //返回配置对象
   return config
 })
 
+const clearLoginAndRedirect = () => {
+  const stores = useUserInfoStore()
+  stores.clearUser()
+  if (router.currentRoute.value.path !== '/login') {
+    void router.push({
+      path: '/login',
+      query: { redirect: router.currentRoute.value.fullPath },
+    })
+  }
+}
 
-//第三步:响应拦截器
 request.interceptors.response.use(
-  (response : any) => {
-    //成功回调
-    //简化数据
-    return response.data
+  (response) => {
+    const data = response.data
+    if (data?.code === 401) {
+      clearLoginAndRedirect()
+      ElMessage.error(data.msg || '登录已失效')
+      return Promise.reject(data)
+    }
+    return data
   },
-  (error : any) => {
-    //失败回调:处理http网络错误的
-    //定义一个变量:存储网络错误信息
-    let message = ''
-    //http状态码
-    const status = error.response.status
+  (error) => {
+    const status = error.response?.status
+    const msgFromBody = error.response?.data?.msg
+    let message = msgFromBody || '网络出现问题'
     switch (status) {
+      case 400:
+        message = msgFromBody || '请求参数错误'
+        break
       case 401:
-        message = 'TOKEN过期'
+        message = msgFromBody || '未登录或登录已失效'
+        clearLoginAndRedirect()
         break
       case 403:
-        message = '无权限访问'
+        message = msgFromBody || '无权限访问'
         break
       case 404:
-        message = '请求地址错误'
+        message = msgFromBody || '请求地址错误'
+        break
+      case 409:
+        message = msgFromBody || '当前数据已发生变化，请刷新后重试'
         break
       case 500:
-        message = '服务器出现问题'
+        message = msgFromBody || '服务器出现问题'
+        break
+      case 503:
+        message = msgFromBody || '服务暂时不可用'
         break
       default:
-        message = '网络出现问题'
-        break
+        if (!error.response) message = '网络连接失败'
     }
-    //提示错误信息
-    ElMessage({
-      type: 'error',
-      message,
-    })
+    ElMessage.error(message)
     return Promise.reject(error)
   },
 )
-  export default request;
+
+export default request

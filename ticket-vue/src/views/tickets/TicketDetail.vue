@@ -53,22 +53,11 @@
           </template>
 
           <div ref="messageListRef" class="message-list">
-            <div
+            <MessageBubble
               v-for="message in ticket?.messages"
               :key="message.id"
-              class="message-item"
-              :class="message.senderType.toLowerCase()"
-            >
-              <el-avatar :size="36">{{ avatarText(message.senderType) }}</el-avatar>
-              <div class="message-body">
-                <div class="message-header">
-                  <span class="sender-name">{{ message.senderName }}</span>
-                  <el-tag v-if="message.senderType === 'AI'" type="success" size="small">AI</el-tag>
-                  <span class="message-time">{{ message.createTime }}</span>
-                </div>
-                <div class="message-content">{{ message.content }}</div>
-              </div>
-            </div>
+              :message="message"
+            />
             <el-empty v-if="!ticket?.messages?.length" description="暂无沟通记录" />
           </div>
 
@@ -105,6 +94,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TagProps } from 'element-plus'
 import { useUserInfoStore } from '@/stores/userInfo'
+import MessageBubble from '@/components/MessageBubble.vue'
 import {
   requestAddTicketMsg,
   requestClaimTicket,
@@ -181,13 +171,6 @@ const priorityTagType = (priority?: string): TagProps['type'] => {
 const priorityName = (priority?: string) => {
   const map: Record<string, string> = { LOW: '低', MEDIUM: '中', HIGH: '高', URGENT: '紧急' }
   return map[priority || ''] || priority
-}
-
-const avatarText = (senderType: string) => {
-  if (senderType === 'AI') return 'AI'
-  if (senderType === 'AGENT') return '客'
-  if (senderType === 'SYSTEM') return '系'
-  return '用'
 }
 
 const scrollToBottom = () => {
