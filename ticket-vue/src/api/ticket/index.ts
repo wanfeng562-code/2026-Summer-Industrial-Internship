@@ -1,5 +1,5 @@
 import request from "@/utils/request";
-import type {R, Page, TicketVo, TicketMessageVo, Orders, TicketCreateRequest} from './type'
+import type {R, Page, TicketVo, TicketMessageVo, Orders, TicketCreateRequest, MessageRequest} from './type'
 
 //定义登录的URL
 enum API{
@@ -27,4 +27,9 @@ export const requestOrdersList = ()=>{
 //创建工单请求接口
 export const requestCreateTicket = (data : TicketCreateRequest)=>{
     return request.post<any, R<TicketVo>>(API.CREATE_TICKET, data)
+}
+
+//创建发送工单消息请求接口
+export const requestAddTicketMsg =(ticketId:number, data:MessageRequest)=>{
+    return request.post<any, R<null>>(`${API.CREATE_TICKET}/${ticketId}/messages`, data)
 }

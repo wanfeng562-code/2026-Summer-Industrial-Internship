@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * <p>
@@ -33,5 +34,11 @@ public interface TicketMapper extends BaseMapper<Ticket> {
             </script>
             """)
     public Page<TicketVo>  pageTicketVo(Page<TicketVo> page, @Param("userId") Long userId);
+
+
+    @Update("update orders set priority = #{priority} where id = #{ticketId")
+    public void updatePriorityById(@Param("ticketId") Long ticketId,
+                                   @Param("priority") String priority);
+
 
 }

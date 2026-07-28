@@ -8,19 +8,17 @@ import com.alibaba.ticketsystem.utils.R;
 import com.alibaba.ticketsystem.vo.UserVo;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+//@CrossOrigin   //解决跨域异常的注解
 @RestController
 public class LoginController {
 
     @Autowired
     private UserService userService;
 
-    @PostMapping("/user/login")
-    public R<?> login(@Valid LoginRequest loginRequest) {
+    @PostMapping("/user/login")  //@RequestBody 用来接收前端提交JSON对象
+    public R<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         UserVo userVo = userService.loginSysUser(loginRequest);
         return R.success("用户登录成功", userVo);
     }

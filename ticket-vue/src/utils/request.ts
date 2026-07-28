@@ -6,7 +6,7 @@ const stores = useUserInfoStore();
   //第一步:创建axios实例
 const request = axios.create({
   baseURL: '/api',
-  timeout: 1000,
+  timeout: 10000,
   headers: {'Content-Type': 'application/json;charset=utf-8'}
 });
 

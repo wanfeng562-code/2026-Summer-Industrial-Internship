@@ -19,6 +19,7 @@ import com.alibaba.ticketsystem.mapper.TicketMapper;
 import com.alibaba.ticketsystem.utils.ApiException;
 import com.alibaba.ticketsystem.vo.TicketVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service   // 当前类是业务逻辑类   此类实例放入spring容器中
 public class TicketService {
 
@@ -44,6 +46,9 @@ public class TicketService {
 
     @Autowired
     private TicketMessageService ticketMessageService;
+
+    @Autowired
+    private AIService aiService;
 
 
     /** 工单状态中文名称映射 */
@@ -145,7 +150,10 @@ public class TicketService {
         String category = ticketCreateRequest.getCategory();
         if(category.equals("")){   //equals("")  和  == 的区别
             //调用AI，用description判断问题类型，等接入AI再完成
-            category = "OTHER";
+            category = aiService.classify(ticketCreateRequest.getDescription());
+            if("CONSULT".equals(category) || "COMPLAINT".equals(category)){
+                category = "OTHER";
+            }
         }
         //3.创建工单
         Ticket ticket = new Ticket();
@@ -176,8 +184,24 @@ public class TicketService {
         ticketMessageMapper.insert(ticketMessage);
 
         //5. AI处理工单
-        //TODO: 调用AI处理工单
-
+        //TODO: 调用AI处理工单  ticketId  UserId content (ticketCreateRequest.getDescription())
+        try{
+            String reply = aiService.processTicket(ticket.getId(), ticketCreateRequest.getDescription(), userId);
+            TicketMessage aiMsg = new TicketMessage();
+            aiMsg.setTicketId(ticket.getId());
+            aiMsg.setUserId(userId);
+            aiMsg.setSenderType("AI");
+            aiMsg.setMessageType("AI_REPLY");
+            aiMsg.setContent(reply);
+            aiMsg.setDeleted(0);
+            aiMsg.setCreateTime(LocalDateTime.now());
+            ticketMessageMapper.insert(aiMsg);
+            ticket.setStatus("MANUAL_REVIEW");
+        } catch (Exception e) {
+            log.error("AI processing failed for ticket {}", ticket.getId(), e);
+            ticket.setStatus("MANUAL_REVIEW");
+        }
+        ticketMapper.updateById(ticket);
         //6. 返回工单信息
         return getTicketDetail(ticket.getId());
     }
@@ -201,17 +225,32 @@ public class TicketService {
         ticketMessage.setTicketId(ticket.getId());
         ticketMessage.setUserId(sysUser.getId());
         ticketMessage.setSenderType(senderType);
-        ticketMessage.setMessageType(messageRequest.getMessageType());
+        ticketMessage.setMessageType("TEXT");
         ticketMessage.setContent(messageRequest.getContent());
         ticketMessage.setDeleted(0);
         ticketMessage.setCreateTime(LocalDateTime.now());
         ticketMessageMapper.insert(ticketMessage);
 
         //发送者是用户的话，则需要AI处理
-        if("USER".equals(senderType) && "MANUAL_REVIEW".equals(ticket.getStatus())){
+        if("USER".equals(senderType)){
+
+            //TODO: 调用AI处理工单
+            try{
+                String reply = aiService.processTicket(ticket.getId(), messageRequest.getContent(), userId);
+                TicketMessage aiMsg = new TicketMessage();
+                aiMsg.setTicketId(ticket.getId());
+                aiMsg.setUserId(userId);
+                aiMsg.setSenderType("AI");
+                aiMsg.setMessageType("AI_REPLY");
+                aiMsg.setContent(reply);
+                aiMsg.setDeleted(0);
+                aiMsg.setCreateTime(LocalDateTime.now());
+                ticketMessageMapper.insert(aiMsg);
+            } catch (Exception e) {
+                log.error("AI processing failed for ticket {}", ticket.getId(), e);
+            }
             ticket.setStatus("AI_PROCESSING");
             ticketMapper.updateById(ticket);
-            //TODO: 调用AI处理工单
         }
 
         //发送者是客服和管理，则工单状态变为 人工复核

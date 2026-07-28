@@ -85,3 +85,8 @@ export interface TicketCreateRequest{
     category:string
 }
 
+export interface MessageRequest{
+    ticketId:number
+    content:string
+}
+

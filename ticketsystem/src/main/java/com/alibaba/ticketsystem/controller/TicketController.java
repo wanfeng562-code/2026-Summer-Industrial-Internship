@@ -51,7 +51,8 @@ public class TicketController {
     //创建工单  提交Form表单
     @SaCheckPermission("ticket:add")
     @PostMapping("/tickets")
-    public R<?> createTicket(@Valid TicketCreateRequest ticketCreateRequest){
+    public R<?> createTicket(@Valid @RequestBody TicketCreateRequest ticketCreateRequest){
+        System.out.println("createTicket" + ticketCreateRequest);
         System.out.println(ticketCreateRequest);
         TicketVo ticketVo = ticketService.createTicket(ticketCreateRequest);
         return R.success("工单创建成功", ticketVo);

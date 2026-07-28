@@ -112,9 +112,13 @@ import { ref, onMounted, nextTick, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { requestTicketDetail } from '@/api/ticket'   // @/   src目录下  
+import { requestTicketDetail, requestAddTicketMsg } from '@/api/ticket'   // @/   src目录下
 import type {R, Page, TicketVo, TicketMessageVo} from '@/api/ticket/type'
 
+const form = reactive({
+  ticketId: null as number | null,
+  content: ''
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -171,8 +175,12 @@ const fetchTicket = async () => {
 const sendMessage = async () => {
   if (!newMessage.value.trim()) return
   sending.value = true
+  form.ticketId = ticket.value.id
+  form.content = newMessage.value
   try {
-    
+    await requestAddTicketMsg(ticket.value.id, form)
+    newMessage.value = ''
+    await fetchTicket()
     ElMessage.success('发送成功')
   } finally {
     sending.value = false

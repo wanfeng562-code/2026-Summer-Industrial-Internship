@@ -1,5 +1,6 @@
 package com.alibaba.ticketsystem.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.alibaba.ticketsystem.entity.Orders;
 import com.alibaba.ticketsystem.entity.SysUser;
 import com.alibaba.ticketsystem.mapper.OrdersMapper;
@@ -27,8 +28,13 @@ public class OrdersService {
     //实现订单分页列表查询
     public Page<Orders> pageOrders(int currentPage, int pageSize){
         //通过当前页和一页多少条记录，得到分页对象
+
+        //登录用户只能看到他自己的订单信息，不能看到别人的订单信息
+        Long userId = StpUtil.getLoginIdAsLong();
+
         Page<Orders> page = new Page<>(currentPage,pageSize);
         QueryWrapper<Orders> qw = new QueryWrapper<>(); //查询对象
+        qw.eq("user_id", userId);
         qw.orderByDesc("id");
         Page<Orders> po = ordersMapper.selectPage(page, qw);
         return po;
