@@ -4,15 +4,15 @@
 USE `ticket_system`;
 
 -- -------------------------------------------
--- 用户数据 (密码都是 123456 的未加密)
+-- 用户数据（演示密码均为 123456，数据库中只保存 BCrypt）
 -- -------------------------------------------
 INSERT INTO `sys_user` (`username`, `password`, `nickname`, `email`, `phone`, `role`, `reputation_score`) VALUES
-                                                                                                              ('admin', '123456', '系统管理员', 'admin@ticket.com', '13800000000', 'ADMIN', 100),
-                                                                                                              ('agent_zhang', '123456', '张客服', 'zhang@ticket.com', '13800000001', 'AGENT', 100),
-                                                                                                              ('agent_li', '123456', '李客服', 'li@ticket.com', '13800000002', 'AGENT', 100),
-                                                                                                              ('user_wang', '123456', '王小明', 'wang@user.com', '13900000001', 'USER', 95),
-                                                                                                              ('user_liu', '123456', '刘小红', 'liu@user.com', '13900000002', 'USER', 85),
-                                                                                                              ('user_chen', '123456', '陈小华', 'chen@user.com', '13900000003', 'USER', 60);
+                                                                                                              ('admin', '$2b$10$ZaSqjiuijP4UKPqbH/2T8.EJVJFPn7Qf1YwHESo5keCR30GQHmNXi', '系统管理员', 'admin@ticket.com', '13800000000', 'ADMIN', 100),
+                                                                                                              ('agent_zhang', '$2b$10$9LF.oPgIEvuCQPNzVJDQI.Nki0T6zX8CLagpgr.K8BjREtEbK53Na', '张客服', 'zhang@ticket.com', '13800000001', 'AGENT', 100),
+                                                                                                              ('agent_li', '$2b$10$PReAO8zbJtsag.ld8A8qNultYtUWBFyITDwkPE0z.Jh2ebShWnmu2', '李客服', 'li@ticket.com', '13800000002', 'AGENT', 100),
+                                                                                                              ('user_wang', '$2b$10$j3VTekfAr6/Aud/D7YtX7e.pypTMolHf86xu3RGs4p.SNDaZn0KxK', '王小明', 'wang@user.com', '13900000001', 'USER', 95),
+                                                                                                              ('user_liu', '$2b$10$rMWF6TQfbsAyBISNkVujQenY2kz.ob5wK.u5/m9UCYJDbjLx8Fzoe', '刘小红', 'liu@user.com', '13900000002', 'USER', 85),
+                                                                                                              ('user_chen', '$2b$10$qavieAdPwTiSMYXWfa2Vm.NjIPWgzz1.s4QjCr4uFJBufjA4qB4XK', '陈小华', 'chen@user.com', '13900000003', 'USER', 60);
 
 -- -------------------------------------------
 -- 订单数据
@@ -49,7 +49,7 @@ INSERT INTO `ticket` (`ticket_no`, `user_id`, `agent_id`, `order_id`, `title`, `
                                                                                                                                                     ('TK20240001', 4, 2, 1, 'iPhone屏幕有划痕', '收到的iPhone 15 Pro Max屏幕有明显划痕，要求退货退款', 'DAMAGE', 'MANUAL_REVIEW', 'HIGH', '2024-02-20 12:00:00'),
                                                                                                                                                     ('TK20240002', 5, NULL, 2, 'MacBook充电器不兼容', '购买的MacBook Pro充电器与国内插座不兼容，需要换货', 'OTHER', 'AI_PROCESSING', 'MEDIUM', '2024-02-20 14:00:00'),
                                                                                                                                                     ('TK20240003', 6, 3, 3, 'AirPods降噪效果差', '购买的AirPods Pro降噪效果不如宣传的好，要求退货', 'REFUND', 'RESOLVED', 'LOW', '2024-02-19 16:00:00'),
-                                                                                                                                                    ('TK20240004', 4, NULL, 4, 'iPad物流一周未更新', 'iPad订单已发货一周，物流信息一直未更新', 'LOGISTICS', 'PENDING', 'MEDIUM', '2024-02-21 10:00:00'),
+                                                                                                                                                    ('TK20240004', 4, NULL, 4, 'iPad物流一周未更新', 'iPad订单已发货一周，物流信息一直未更新', 'LOGISTICS', 'AI_PROCESSING', 'MEDIUM', '2024-02-21 10:00:00'),
                                                                                                                                                     ('TK20240005', 5, 2, 5, 'Apple Watch表带断裂', 'Apple Watch Ultra 2的表带使用两天就断裂了', 'DAMAGE', 'MANUAL_REVIEW', 'HIGH', '2024-02-20 18:00:00');
 
 -- -------------------------------------------

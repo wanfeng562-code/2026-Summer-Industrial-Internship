@@ -26,19 +26,35 @@ public interface TicketMapper extends BaseMapper<Ticket> {
             LEFT JOIN sys_user a ON t.agent_id = a.id 
             <where>
                 t.deleted=0 
-                <if test='userId != null'>
-                    AND t.user_id = #{userId}
-                </if>
+                <choose>
+                    <when test='"USER".equals(role)'>
+                        AND t.user_id = #{currentUserId}
+                    </when>
+                    <when test='"AGENT".equals(role)'>
+                        AND (
+                            t.agent_id = #{currentUserId}
+                            OR (t.agent_id IS NULL AND t.status = 'MANUAL_REVIEW')
+                        )
+                    </when>
+                    <when test='"ADMIN".equals(role)'>
+                        AND 1 = 1
+                    </when>
+                    <otherwise>
+                        AND 1 = 0
+                    </otherwise>
+                </choose>
             </where>
             order by t.create_time desc
             </script>
             """)
-    public Page<TicketVo>  pageTicketVo(Page<TicketVo> page, @Param("userId") Long userId);
+    Page<TicketVo> pageTicketVo(Page<TicketVo> page,
+                                @Param("currentUserId") Long currentUserId,
+                                @Param("role") String role);
 
 
-    @Update("update orders set priority = #{priority} where id = #{ticketId")
-    public void updatePriorityById(@Param("ticketId") Long ticketId,
-                                   @Param("priority") String priority);
+    @Update("UPDATE ticket SET priority = #{priority}, update_time = NOW() WHERE id = #{ticketId} AND deleted = 0")
+    void updatePriorityById(@Param("ticketId") Long ticketId,
+                            @Param("priority") String priority);
 
 
 }

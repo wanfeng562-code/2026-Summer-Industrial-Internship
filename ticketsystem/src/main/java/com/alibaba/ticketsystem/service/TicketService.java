@@ -21,6 +21,7 @@ import com.alibaba.ticketsystem.vo.TicketVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,11 @@ public class TicketService {
     @Autowired
     private AIService aiService;
 
+    @Autowired
+    private OrdersService ordersService;
+
+    @Autowired
+    private UserService userService;
 
     /** 工单状态中文名称映射 */
     private static final Map<String, String> STATUS_NAMES = Map.of(
@@ -66,9 +72,10 @@ public class TicketService {
     //工单详情
     public TicketVo getTicketDetail(Long ticketId){
         Ticket ticket = ticketMapper.selectById(ticketId);
-        if(ticket == null){
-            throw new ApiException("该工单不存在");
+        if(ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())){
+            throw new ApiException(HttpStatus.NOT_FOUND, "该工单不存在");
         }
+        assertCanView(ticket, userService.requireCurrentUser());
         return  convertToTicketVo(ticket);
     }
 
@@ -119,18 +126,9 @@ public class TicketService {
      * 如果登录用户角色是AGENT  ADMIN ，则能看到全部的工单信息
      */
     public Page<TicketVo> pageTickets(int current, int size){
-        Long userId = StpUtil.getLoginIdAsLong();
-        SysUser user = sysUserMapper.selectById(userId);
-        if(user == null){
-            throw new ApiException("当前系统登录用户被锁定");
-        }
-        //如果登录用户角色是USER，则只能看到自己的工单信息
-        if(user.getRole().equals("AGENT") || user.getRole().equals("ADMIN")){
-            userId = null;
-        }
+        SysUser user = userService.requireCurrentUser();
         Page<TicketVo> page = new Page<>(current, size);
-        Page<TicketVo> pt = ticketMapper.pageTicketVo(page, userId);
-        return pt;
+        return ticketMapper.pageTicketVo(page, user.getId(), user.getRole());
     }
 
     @Transactional   //这是一个事务
@@ -138,17 +136,14 @@ public class TicketService {
 
 
         //1.把当前工单对应的订单信息拿到
-        Orders orders = ordersMapper.selectById(ticketCreateRequest.getOrdersId());
-        if(orders == null){
-            throw new ApiException("该订单不存在");
-        }
+        Orders orders = ordersService.requireOwnedOrderForTicket(ticketCreateRequest.getOrderId());
 
         //集成Sa-Token，获取当前登录用户ID
         Long userId = StpUtil.getLoginIdAsLong();
 
         //2.如果问题分类为空，则AI判断问题的类型
         String category = ticketCreateRequest.getCategory();
-        if(category.equals("")){   //equals("")  和  == 的区别
+        if(category == null || category.isBlank()){
             //调用AI，用description判断问题类型，等接入AI再完成
             category = aiService.classify(ticketCreateRequest.getDescription());
             if("CONSULT".equals(category) || "COMPLAINT".equals(category)){
@@ -164,7 +159,8 @@ public class TicketService {
         ticket.setDescription(ticketCreateRequest.getDescription());
         ticket.setCategory(category);
         ticket.setStatus("AI_PROCESSING");
-        ticket.setPriority("MEDIUM");
+        String priority = ticketCreateRequest.getPriority();
+        ticket.setPriority(priority == null || priority.isBlank() ? "MEDIUM" : priority);
         ticket.setSlaWarning(0);
         ticket.setSlaEscalated(0);
         ticket.setSlaDeadline(LocalDateTime.now().plusHours(2));  //要求2小时内响应完成
@@ -210,13 +206,14 @@ public class TicketService {
     public void addTicketMessage(Long ticketId, MessageRequest messageRequest){
         //1.拿到当前工单信息
         Ticket ticket = ticketMapper.selectById(ticketId);
-        if(ticket == null){
-            throw new ApiException("该工单不存在");
+        if(ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())){
+            throw new ApiException(HttpStatus.NOT_FOUND, "该工单不存在");
         }
 
         //2.拿到当前登录用户ID
-        Long userId = StpUtil.getLoginIdAsLong();  //集成Sa-Token，获取当前登录用户ID
-        SysUser sysUser = sysUserMapper.selectById(userId);
+        SysUser sysUser = userService.requireCurrentUser();
+        Long userId = sysUser.getId();
+        assertCanSendMessage(ticket, sysUser);
         //发送者类型，就是发送消息用户的类型
         String senderType = sysUser.getRole();
 
@@ -265,19 +262,22 @@ public class TicketService {
     public void updateTicketStatus(Long ticketId, TicketUpdateRequest ticketUpdateRequest){
         //1.拿到当前工单信息
         Ticket ticket = ticketMapper.selectById(ticketId);
-        if(ticket == null){
-            throw new ApiException("该工单不存在");
+        if(ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())){
+            throw new ApiException(HttpStatus.NOT_FOUND, "该工单不存在");
         }
 
-        if(!ticketUpdateRequest.getStatus().equals("")){
+        SysUser currentUser = userService.requireCurrentUser();
+        assertCanUpdate(ticket, currentUser, ticketUpdateRequest);
+
+        if(ticketUpdateRequest.getStatus() != null && !ticketUpdateRequest.getStatus().isBlank()){
             ticket.setStatus(ticketUpdateRequest.getStatus());
         }
 
-        if(!ticketUpdateRequest.getCategory().equals("")){
+        if(ticketUpdateRequest.getCategory() != null && !ticketUpdateRequest.getCategory().isBlank()){
             ticket.setCategory(ticketUpdateRequest.getCategory());
         }
 
-        if(!ticketUpdateRequest.getPriority().equals("")){
+        if(ticketUpdateRequest.getPriority() != null && !ticketUpdateRequest.getPriority().isBlank()){
             ticket.setPriority(ticketUpdateRequest.getPriority());
         }
 
@@ -285,5 +285,51 @@ public class TicketService {
             ticket.setAgentId(ticketUpdateRequest.getAgentId());
         }
         ticketMapper.updateById(ticket);
+    }
+
+    private void assertCanView(Ticket ticket, SysUser currentUser) {
+        if ("ADMIN".equals(currentUser.getRole())) {
+            return;
+        }
+        if ("USER".equals(currentUser.getRole()) && ticket.getUserId().equals(currentUser.getId())) {
+            return;
+        }
+        if ("AGENT".equals(currentUser.getRole())
+                && (currentUser.getId().equals(ticket.getAgentId())
+                || (ticket.getAgentId() == null && "MANUAL_REVIEW".equals(ticket.getStatus())))) {
+            return;
+        }
+        throw new ApiException(HttpStatus.FORBIDDEN, "无权访问该工单");
+    }
+
+    private void assertCanSendMessage(Ticket ticket, SysUser currentUser) {
+        if ("CLOSED".equals(ticket.getStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "已关闭工单不能继续发送消息");
+        }
+        if ("USER".equals(currentUser.getRole()) && ticket.getUserId().equals(currentUser.getId())) {
+            return;
+        }
+        if ("AGENT".equals(currentUser.getRole()) && currentUser.getId().equals(ticket.getAgentId())) {
+            return;
+        }
+        if ("ADMIN".equals(currentUser.getRole())) {
+            return;
+        }
+        throw new ApiException(HttpStatus.FORBIDDEN, "无权向该工单发送消息");
+    }
+
+    private void assertCanUpdate(Ticket ticket, SysUser currentUser, TicketUpdateRequest request) {
+        if ("ADMIN".equals(currentUser.getRole())) {
+            return;
+        }
+        if (!"AGENT".equals(currentUser.getRole())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "当前角色无权更新工单");
+        }
+        if (ticket.getAgentId() != null && !ticket.getAgentId().equals(currentUser.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "该工单已由其他客服处理");
+        }
+        if (request.getAgentId() != null && !request.getAgentId().equals(currentUser.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "客服只能将工单分配给自己");
+        }
     }
 }

@@ -70,7 +70,7 @@ CREATE TABLE `ticket` (
                           `title` VARCHAR(200) NOT NULL COMMENT '工单标题',
                           `description` TEXT NOT NULL COMMENT '工单描述',
                           `category` VARCHAR(30) NOT NULL COMMENT '分类: REFUND/LOGISTICS/DAMAGE/INVOICE/OTHER',
-                          `status` VARCHAR(30) NOT NULL DEFAULT 'PENDING' COMMENT '状态: PENDING/AI_PROCESSING/MANUAL_REVIEW/RESOLVED/CLOSED',
+                          `status` VARCHAR(30) NOT NULL DEFAULT 'AI_PROCESSING' COMMENT '状态: AI_PROCESSING/MANUAL_REVIEW/RESOLVED/CLOSED',
                           `priority` VARCHAR(10) NOT NULL DEFAULT 'MEDIUM' COMMENT '优先级: LOW/MEDIUM/HIGH/URGENT',
                           `sla_warning` TINYINT NOT NULL DEFAULT 0 COMMENT 'SLA预警: 0-正常 1-已预警',
                           `sla_escalated` TINYINT NOT NULL DEFAULT 0 COMMENT 'SLA升级: 0-正常 1-已升级',

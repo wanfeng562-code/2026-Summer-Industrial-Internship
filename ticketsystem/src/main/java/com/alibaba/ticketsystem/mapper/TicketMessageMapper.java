@@ -18,6 +18,6 @@ import java.util.List;
 public interface TicketMessageMapper extends BaseMapper<TicketMessage> {
 
     //根据工单ID查询该工单的消息集合
-    @Select("SELECT * FROM ticket_message WHERE ticket_id=#{ticketId}")
+    @Select("SELECT * FROM ticket_message WHERE ticket_id=#{ticketId} AND deleted=0 ORDER BY create_time ASC, id ASC")
     public List<TicketMessage> selectTicketMessageByTicketId(@Param("ticketId") Long ticketId);
 }

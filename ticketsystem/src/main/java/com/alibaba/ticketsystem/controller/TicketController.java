@@ -12,7 +12,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.stereotype.Controller;
 
 /**
  * <p>
@@ -52,17 +51,15 @@ public class TicketController {
     @SaCheckPermission("ticket:add")
     @PostMapping("/tickets")
     public R<?> createTicket(@Valid @RequestBody TicketCreateRequest ticketCreateRequest){
-        System.out.println("createTicket" + ticketCreateRequest);
-        System.out.println(ticketCreateRequest);
         TicketVo ticketVo = ticketService.createTicket(ticketCreateRequest);
         return R.success("工单创建成功", ticketVo);
     }
 
     //添加工单消息/沟通消息  @RequestBody 提交JSON对象
-    @SaCheckPermission("ticket:add")
+    @SaCheckPermission("ticket:message")
     @PostMapping("/tickets/{ticketId}/messages")
     public R<?> addTicketMessage(@PathVariable("ticketId") Long ticketId,
-                                 @RequestBody MessageRequest messageRequest){
+                                 @Valid @RequestBody MessageRequest messageRequest){
         ticketService.addTicketMessage(ticketId,messageRequest);
         return R.success("工单消息/沟通消息添加成功");
     }

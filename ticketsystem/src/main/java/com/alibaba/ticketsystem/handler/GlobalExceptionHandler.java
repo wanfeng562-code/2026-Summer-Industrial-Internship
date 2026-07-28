@@ -5,9 +5,14 @@ import cn.dev33.satoken.exception.NotPermissionException;
 import cn.dev33.satoken.exception.NotRoleException;
 import com.alibaba.ticketsystem.utils.ApiException;
 import com.alibaba.ticketsystem.utils.R;
+import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,60 +23,67 @@ import java.util.Map;
 /**
  * 全局异常处理类
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ApiException.class)  //捕获APIException异常
-    public R<?> exceptionHandler(ApiException e){
-        return R.failure(e.getMessage());
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<R<?>> handleApiException(ApiException e){
+        HttpStatus status = e.getStatus();
+        return ResponseEntity.status(status)
+                .body(R.failure(status.value(), e.getMessage(), e.getData()));
     }
 
-    //捕获参数校验异常
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public R<?> methodException(MethodArgumentNotValidException e){
+    public ResponseEntity<R<?>> handleMethodArgumentNotValid(MethodArgumentNotValidException e){
         Map<String, String> errors = new HashMap<>();
-        e.getBindingResult().getAllErrors().forEach((error)->{
-            String feildName = ((FieldError)error).getField();  //校验属性
-            String errorMsg = error.getDefaultMessage();
-            errors.put(feildName,errorMsg);
+        e.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = ((FieldError) error).getField();
+            errors.put(fieldName, error.getDefaultMessage());
         });
-        return R.failure(401,"参数校验异常", errors);
+        Map<String, Object> data = Map.of("fieldErrors", errors);
+        return ResponseEntity.badRequest()
+                .body(R.failure(400, "参数校验失败", data));
     }
 
-    // 处理未登录异常
+    @ExceptionHandler({
+            ConstraintViolationException.class,
+            HttpMessageNotReadableException.class,
+            MissingServletRequestParameterException.class
+    })
+    public ResponseEntity<R<?>> handleBadRequest(Exception e) {
+        return ResponseEntity.badRequest()
+                .body(R.failure(400, "请求参数格式不正确"));
+    }
+
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<R<?>> handleDuplicateKey(DuplicateKeyException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(R.failure(409, "数据已存在，请勿重复提交"));
+    }
+
     @ExceptionHandler(NotLoginException.class)
-    public ResponseEntity handleNotLoginException(NotLoginException e) {
-        //return R.error(401, "未登录或Token过期：" + e.getMessage(), null);
-        Map<String, Object> response = new HashMap<>();
-        response.put("code", 401);
-        response.put("message", "无此角色权限，禁止访问");
-        response.put("data", null);
-
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+    public ResponseEntity<R<?>> handleNotLoginException(NotLoginException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(R.failure(401, "未登录或登录状态已失效"));
     }
 
-    // 处理无角色异常
     @ExceptionHandler(NotRoleException.class)
-    public ResponseEntity handleNotRoleException(NotRoleException e) {
-
-        //return R.error(403, "无此角色权限：" + e.getMessage(), null);
-        Map<String, Object> response = new HashMap<>();
-        response.put("code", 403);
-        response.put("message", "无此角色权限，禁止访问");
-        response.put("data", null);
-
-        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    public ResponseEntity<R<?>> handleNotRoleException(NotRoleException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(R.failure(403, "当前角色无权执行该操作"));
     }
 
-    // 处理无权限异常
     @ExceptionHandler(NotPermissionException.class)
-    public ResponseEntity handleNotPermissionException(NotPermissionException e) {
-        //return R.error(403, "无此操作权限：" + e.getMessage(), null);  //返回200状态码
-        Map<String, Object> response = new HashMap<>();
-        response.put("code", 403);
-        response.put("message", "权限不足，禁止访问");
-        response.put("data", null);
+    public ResponseEntity<R<?>> handleNotPermissionException(NotPermissionException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(R.failure(403, "权限不足，禁止访问"));
+    }
 
-        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN); //返回403状态码
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<R<?>> handleUnexpectedException(Exception e) {
+        log.error("Unhandled server exception", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(R.failure(500, "服务器内部异常"));
     }
 }

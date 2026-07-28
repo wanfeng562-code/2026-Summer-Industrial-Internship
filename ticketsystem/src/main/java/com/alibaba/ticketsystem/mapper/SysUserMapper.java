@@ -9,7 +9,10 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
 
     //根据用户名获取用户的信息
 
-    @Select("select * from sys_user where username = #{username}")
+    @Select("select * from sys_user where username = #{username} and deleted = 0")
     public SysUser getUserByUsername(@Param("username") String username);
+
+    @Select("select count(*) > 0 from sys_user where username = #{username}")
+    boolean usernameExists(@Param("username") String username);
 
 }
