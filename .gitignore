@@ -15,3 +15,14 @@
 *.zst
 *.cab
 *.iso
+
+# Local presentation source materials
+/PPT/武科大专属ppt模板1 (1).pptx
+/PPT/PPT制作流程复盘与优化建议.md
+
+# Presentation generation and inspection artifacts
+/PPT/.tmp_ticket_defense/
+/PPT/*.pptx.inspect.ndjson
+
+# Regenerable local review/rendering files
+/tmp/
