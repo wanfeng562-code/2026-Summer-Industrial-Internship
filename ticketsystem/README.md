@@ -16,12 +16,21 @@
 1. `src/main/resources/static/ticket_system.sql`：创建 `ticket_system` 库和表。
 2. `src/main/resources/static/data.sql`：导入演示账号、订单、工单和策略。
 3. `src/main/resources/static/migrate_full_requirements.sql`：补充账号运维、坐席组、动态分类、归档、满意度、AI 会话和语义检索配置。
+4. 可选执行 `src/main/resources/static/seed_rich_demo_data.sql`：只在现有库上追加丰富演示数据。
 
 Windows MySQL 命令行应使用 `mysql --default-character-set=utf8mb4 -u root -p` 启动。只运行 `SET NAMES utf8mb4` 不能修正客户端读取 UTF-8 脚本时的本地代码页问题。
 
 已有老师早期数据库且账号密码仍为明文 `123456` 时，只执行
 `src/main/resources/static/migrate_legacy_passwords.sql`。在已有 7-28/A 数据库上继续开发时，再执行
 `src/main/resources/static/migrate_member_c_workflow.sql`；随后执行 `migrate_full_requirements.sql`。两者均保留现有业务数据，后者采用 MySQL 8.0 兼容的字段存在性检查并可重复执行。
+
+如需让列表、工作台和报表更充实，在迁移完成后执行：
+
+```sql
+source ticketsystem/src/main/resources/static/seed_rich_demo_data.sql;
+```
+
+该脚本新增 16 个账号、30 个订单、24 个工单，并配套消息、操作日志、AI 处理日志、满意度、FAQ、策略、坐席组、动态分类和 AI 历史会话。脚本不会 `DROP`、`TRUNCATE` 或删除业务表，使用独立前缀和存在性检查，重复执行不会重复写入；SQL 异常会回滚当前批次。已在临时 MySQL 8.0.42 中完成两次连续导入验证。
 
 演示账号密码均为 `123456`：
 
@@ -30,6 +39,8 @@ Windows MySQL 命令行应使用 `mysql --default-character-set=utf8mb4 -u root 
 | 管理员 | `admin` |
 | 客服 | `agent_zhang`、`agent_li` |
 | 用户 | `user_wang`、`user_liu`、`user_chen` |
+| 扩充客服 | `demo_2026_agent_refund`、`demo_2026_agent_logistics`、`demo_2026_agent_quality`、`demo_2026_agent_general` |
+| 扩充用户 | `demo_2026_chenxi`、`demo_2026_linan`、`demo_2026_zhouyu` 等 12 个账号 |
 
 数据库中保存的是 BCrypt 哈希，不保存明文密码。
 
@@ -128,3 +139,5 @@ Authorization: Bearer <token>
 - `docs/成员C工单策略AI接口说明.md`
 
 可导入的认证/订单请求集合见 `docs/postman/成员A认证订单接口.postman_collection.json`。
+
+扩充数据的账号、数量、推荐用例和核对 SQL 见 `docs/丰富演示数据说明.md`。

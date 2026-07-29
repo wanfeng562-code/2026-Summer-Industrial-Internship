@@ -36,6 +36,7 @@
 1. `ticketsystem/src/main/resources/static/ticket_system.sql`
 2. `ticketsystem/src/main/resources/static/data.sql`
 3. `ticketsystem/src/main/resources/static/migrate_full_requirements.sql`
+4. 可选：`ticketsystem/src/main/resources/static/seed_rich_demo_data.sql`，在现有数据上追加一批丰富的联调数据。
 
 在仓库根目录打开 MySQL 客户端：
 
@@ -49,6 +50,7 @@ mysql --default-character-set=utf8mb4 -u root -p
 source ticketsystem/src/main/resources/static/ticket_system.sql;
 source ticketsystem/src/main/resources/static/data.sql;
 source ticketsystem/src/main/resources/static/migrate_full_requirements.sql;
+source ticketsystem/src/main/resources/static/seed_rich_demo_data.sql;
 ```
 
 Windows 下应在启动客户端时使用 `--default-character-set=utf8mb4`；只执行 `SET NAMES utf8mb4` 不能改变客户端读取脚本文件时使用的本地代码页。全量需求迁移脚本本身保持 ASCII，并用 UTF-8 十六进制写入中文种子，避免 `source` 再次产生乱码。
@@ -58,6 +60,17 @@ Windows 下应在启动客户端时使用 `--default-character-set=utf8mb4`；�
 1. `migrate_legacy_passwords.sql`：把旧演示明文密码迁移为 BCrypt。
 2. `migrate_member_c_workflow.sql`：补充工作流、操作日志、FAQ、策略和 SLA 结构。
 3. `migrate_full_requirements.sql`：补充账号运维、坐席组、动态分类、归档、满意度、AI 会话和 FAQ 语义配置。该脚本兼容 MySQL 8.0，并可重复执行。
+4. `seed_rich_demo_data.sql`：可选增量脚本，不删除或覆盖现有订单、工单；使用独立业务编号，可重复执行。
+
+扩充脚本一次会补充：
+
+- 16 个账号（12 个普通用户、4 个分组客服）；
+- 4 个坐席组、2 个动态分类；
+- 30 个订单、24 个不同状态的工单；
+- 78 条工单消息、87 条操作日志、24 条 AI 处理日志；
+- 7 条满意度、10 条 FAQ、4 条策略和 6 个 AI 历史会话。
+
+脚本已经在临时 MySQL 8.0.42 中连续执行两次验证，第二次不会重复插入。它要求先完成 `migrate_full_requirements.sql`；任一语句失败时当前批次会回滚。
 
 ## 4. 启动后端
 
@@ -149,6 +162,10 @@ npm run build
 | 管理员 | `admin` | 查看全量统计和用户、管理售后策略/FAQ、分配或关闭工单 |
 | 客服 | `agent_zhang`、`agent_li` | 查看待处理工单、接单、回复、解决和关闭 |
 | 普通用户 | `user_wang`、`user_liu`、`user_chen` | 查看自己的订单/工单、创建工单、补充消息、使用 AI 客服 |
+| 扩充客服 | `demo_2026_agent_refund`、`demo_2026_agent_logistics`、`demo_2026_agent_quality`、`demo_2026_agent_general` | 验证四个坐席组的数据范围、组长报表和接单 |
+| 扩充用户 | `demo_2026_chenxi`、`demo_2026_linan`、`demo_2026_zhouyu` 等 12 个账号 | 验证丰富订单、工单状态、满意度和 AI 会话 |
+
+扩充账号密码同样为 `123456`。扩充数据统一使用 `demo_2026_*`、`DEMO2026*`、`DEMO-TK-*` 和 `DEMOCHAT2026*` 前缀，便于查询和与真实数据区分。
 
 ## 8. 推荐演示流程
 
@@ -216,3 +233,4 @@ npm run build
 - `docs/成员C工单策略AI接口说明.md`
 - `docs/成员C端到端验收清单.md`
 - `docs/缺陷修复与逻辑漏洞审计记录.md`
+- `docs/丰富演示数据说明.md`

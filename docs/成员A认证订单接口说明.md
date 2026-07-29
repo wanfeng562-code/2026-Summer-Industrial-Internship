@@ -92,7 +92,7 @@ HTTP 状态与响应 `code` 一致：参数错误 `400`、未登录/Token 失效
 
 ### 2.3 退出
 
-正式接口：`POST /user/logout`。为兼容 7-28 前端，当前也接受 `GET /user/logout`。需要 Token。
+正式接口：`POST /user/logout`，需要 Token。退出会改变登录状态，因此不提供 GET 版本，避免预取或缓存请求意外触发退出。
 
 ### 2.4 查询个人资料
 

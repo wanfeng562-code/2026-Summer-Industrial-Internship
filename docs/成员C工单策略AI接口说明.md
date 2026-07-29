@@ -139,7 +139,7 @@ data:[DONE]
 ```
 
 - `USER`：本人工单。
-- `AGENT`：本人已接单工单及未分配的 `MANUAL_REVIEW` 工单。
+- `AGENT`：本人已接单、本组可见工单，以及未绑定任何坐席组的公共池 `MANUAL_REVIEW` 工单。
 - `ADMIN`：全部未删除工单。
 
 ## 7. 数据库迁移与验证
@@ -149,8 +149,17 @@ data:[DONE]
 1. `migrate_legacy_passwords.sql`（仅旧明文演示密码需要）。
 2. `migrate_member_a_auth_orders.sql`（未执行过 A 迁移时）。
 3. `migrate_member_c_workflow.sql`。
+4. `migrate_full_requirements.sql`。
 
-全新数据库直接执行 `ticket_system.sql` 后执行 `data.sql`。
+全新数据库依次执行 `ticket_system.sql`、`data.sql` 和 `migrate_full_requirements.sql`。
+
+需要追加完整状态分布、日志、满意度、FAQ 和 AI 历史用于联调时，再执行：
+
+```sql
+source ticketsystem/src/main/resources/static/seed_rich_demo_data.sql;
+```
+
+扩充脚本使用 `DEMO-TK-*` 工单号，连续执行不会重复插入，可直接用于工作台、报表、工单详情和 AI 只读查询验收。
 
 当前无需 MySQL 和 DashScope 即可运行的回归命令：
 
