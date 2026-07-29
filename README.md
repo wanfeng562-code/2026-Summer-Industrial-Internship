@@ -35,27 +35,29 @@
 
 1. `ticketsystem/src/main/resources/static/ticket_system.sql`
 2. `ticketsystem/src/main/resources/static/data.sql`
+3. `ticketsystem/src/main/resources/static/migrate_full_requirements.sql`
 
 在仓库根目录打开 MySQL 客户端：
 
 ```powershell
-mysql -u root -p
+mysql --default-character-set=utf8mb4 -u root -p
 ```
 
 进入 MySQL 提示符后执行：
 
 ```sql
-SET NAMES utf8mb4;
 source ticketsystem/src/main/resources/static/ticket_system.sql;
 source ticketsystem/src/main/resources/static/data.sql;
+source ticketsystem/src/main/resources/static/migrate_full_requirements.sql;
 ```
 
-Windows 下必须先执行 `SET NAMES utf8mb4;`，否则 MySQL 命令行客户端可能按本机代码页解释 UTF-8 中文，出现 `Incorrect string value` 或 `Data too long`。
+Windows 下应在启动客户端时使用 `--default-character-set=utf8mb4`；只执行 `SET NAMES utf8mb4` 不能改变客户端读取脚本文件时使用的本地代码页。全量需求迁移脚本本身保持 ASCII，并用 UTF-8 十六进制写入中文种子，避免 `source` 再次产生乱码。
 
 如果使用早期课程数据库，不要重新导入全量数据，应先备份，再按实际版本执行：
 
 1. `migrate_legacy_passwords.sql`：把旧演示明文密码迁移为 BCrypt。
 2. `migrate_member_c_workflow.sql`：补充工作流、操作日志、FAQ、策略和 SLA 结构。
+3. `migrate_full_requirements.sql`：补充账号运维、坐席组、动态分类、归档、满意度、AI 会话和 FAQ 语义配置。该脚本兼容 MySQL 8.0，并可重复执行。
 
 ## 4. 启动后端
 
@@ -102,7 +104,7 @@ spring.ai.dashscope.chat.options.temperature=${DASHSCOPE_TEMPERATURE:0.7}
 | 默认模型 | `qwen3.7-max` | 普通客服对话、流式对话、工单分类与回复、只读工具调用 |
 | 温度 | `0.7` | 在稳定回答和自然表达之间取平衡 |
 | 系统提示词 | `AiConfig.java` | 限定中文客服身份、安全边界和回复风格 |
-| 工具 | `TicketAiTools.java` | 只读查询有权访问的订单、工单、策略和 FAQ |
+| 工具 | `TicketAiTools.java` | 只读查询本人全部订单/工单，或按 `ORD...`、`TK...`、数字工单 ID 精确查询；也可查询策略和 FAQ |
 
 `qwen3.7-max` 是模型别名，平台可能在未来将别名指向更新版本。需要固定答辩结果时，可在 IDEA 运行配置中增加快照模型，例如：
 
@@ -157,6 +159,8 @@ npm run build
 5. 使用 `admin` 登录，查看工作台真实统计、“用户管理”和“售后策略”页面。
 6. 在“AI 客服”验证普通/流式回复、停止生成和创建工单入口。
 
+AI 客服支持“列出我的全部订单和工单”、按订单号查询订单，以及按工单号或数字 ID 查询工单。模型不会直接连接数据库或执行 SQL；后端只读工具使用当前登录用户身份过滤数据。离开 AI 页面再返回时会自动恢复最近会话，模型回答时会携带本会话最近 12 条消息。
+
 工单主流程为：
 
 ```text
@@ -182,6 +186,8 @@ npm run build
 ```
 
 真实三角色和 AI 验收按 `docs/成员C端到端验收清单.md` 执行。自动化测试不会连接开发数据库，也不会真实调用 DashScope。
+
+当前最新离线验证结果：后端 `.\mvnw.cmd clean test` 共 71 项全部通过，前端 `npm run build` 通过。已知缺陷、逻辑漏洞、修复说明和仍需真实环境验证的边界见 `docs/缺陷修复与逻辑漏洞审计记录.md`。
 
 后端运行后可执行核心 API 冒烟流程：
 
@@ -209,3 +215,4 @@ npm run build
 - `docs/成员B前端交付与联调说明.md`
 - `docs/成员C工单策略AI接口说明.md`
 - `docs/成员C端到端验收清单.md`
+- `docs/缺陷修复与逻辑漏洞审计记录.md`
