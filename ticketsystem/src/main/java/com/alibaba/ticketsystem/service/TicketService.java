@@ -6,6 +6,7 @@ import com.alibaba.ticketsystem.dto.MessageRequest;
 import com.alibaba.ticketsystem.dto.TicketCreateRequest;
 import com.alibaba.ticketsystem.entity.Orders;
 import com.alibaba.ticketsystem.entity.SysUser;
+import com.alibaba.ticketsystem.entity.TicketCategory;
 import com.alibaba.ticketsystem.entity.TicketMessage;
 import com.alibaba.ticketsystem.mapper.OrdersMapper;
 import com.alibaba.ticketsystem.mapper.SysUserMapper;
@@ -44,11 +45,14 @@ public class TicketService {
     private final TicketOperationLogService operationLogService;
     private final AfterSalePolicyService policyService;
     private final AiProcessLogService aiProcessLogService;
+    private final TicketCategoryService categoryService;
+    private final AgentGroupService groupService;
+    private final ContentModerationService contentModerationService;
 
     /** 工单状态中文名称映射 */
     private static final Map<String, String> STATUS_NAMES = Map.of(
             "PENDING", "待处理", "AI_PROCESSING", "AI预处理中",
-            "MANUAL_REVIEW", "人工复核", "RESOLVED", "已解决", "CLOSED", "已关闭"
+            "MANUAL_REVIEW", "人工复核", "RESOLVED", "已解决", "REJECTED", "已驳回", "CLOSED", "已关闭"
     );
 
     /** 工单分类中文名称映射 */
@@ -73,7 +77,10 @@ public class TicketService {
         ticketVo.setTitle(ticket.getTitle());
         ticketVo.setDescription(ticket.getDescription());
         ticketVo.setCategory(ticket.getCategory());
-        ticketVo.setCategoryName(CATEGORY_NAMES.get(ticket.getCategory()));
+        ticketVo.setCategoryName(resolveCategoryName(ticket.getCategory()));
+        ticketVo.setGroupId(ticket.getGroupId());
+        ticketVo.setArchived(ticket.getArchived());
+        ticketVo.setArchiveTime(ticket.getArchiveTime());
         ticketVo.setStatus(ticket.getStatus());
         ticketVo.setStatusName(STATUS_NAMES.get(ticket.getStatus()));
         ticketVo.setPriority(ticket.getPriority());
@@ -99,6 +106,14 @@ public class TicketService {
             }
         }
 
+        if (ticket.getGroupId() != null) {
+            try {
+                ticketVo.setGroupName(groupService.require(ticket.getGroupId()).getGroupName());
+            } catch (ApiException ignored) {
+                // 历史工单关联的分组被删除时，仍保留其余详情内容。
+            }
+        }
+
         Orders orders = ordersMapper.selectById(ticket.getOrderId());
         if(orders != null){
             ticketVo.setOrderNo(orders.getOrderNo());
@@ -113,14 +128,35 @@ public class TicketService {
      * 如果登录用户角色是USER，则只能看到自己的工单信息
      * 如果登录用户角色是AGENT  ADMIN ，则能看到全部的工单信息
      */
-    public Page<TicketVo> pageTickets(int current, int size){
+    public Page<TicketVo> pageTickets(int current, int size, String keyword, String status,
+                                      String category, String priority, boolean archived){
         SysUser user = userService.requireCurrentUser();
         Page<TicketVo> page = new Page<>(current, size);
-        return ticketMapper.pageTicketVo(page, user.getId(), user.getRole());
+        return ticketMapper.pageTicketVo(page, user.getId(), user.getRole(), user.getAgentGroupId(),
+                normalizeFilter(keyword), normalizeFilter(status), normalizeFilter(category),
+                normalizeFilter(priority), archived ? 1 : 0);
+    }
+
+    private String normalizeFilter(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    public List<TicketVo> exportTickets(String keyword, String status, String category,
+                                        String priority, boolean archived) {
+        SysUser user = userService.requireCurrentUser();
+        if (!"ADMIN".equals(user.getRole())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "仅管理员可以导出工单");
+        }
+        Page<TicketVo> page = new Page<>(1, 100000);
+        return ticketMapper.pageTicketVo(page, user.getId(), user.getRole(), user.getAgentGroupId(),
+                normalizeFilter(keyword), normalizeFilter(status), normalizeFilter(category),
+                normalizeFilter(priority), archived ? 1 : 0).getRecords();
     }
 
     @Transactional   //这是一个事务
     public TicketVo createTicket(TicketCreateRequest ticketCreateRequest){
+        contentModerationService.validateUserContent(ticketCreateRequest.getTitle());
+        contentModerationService.validateUserContent(ticketCreateRequest.getDescription());
 
 
         //1.把当前工单对应的订单信息拿到
@@ -131,6 +167,7 @@ public class TicketService {
 
         //2.如果问题分类为空，则AI判断问题的类型
         String category = ticketCreateRequest.getCategory();
+        boolean aiClassified = category == null || category.isBlank();
         if(category == null || category.isBlank()){
             //调用AI，用description判断问题类型，等接入AI再完成
             category = aiService.classify(ticketCreateRequest.getDescription());
@@ -138,6 +175,17 @@ public class TicketService {
                 category = "OTHER";
             }
         }
+        TicketCategory categoryConfig;
+        try {
+            categoryConfig = categoryService.requireActive(category);
+        } catch (ApiException exception) {
+            if (!aiClassified) {
+                throw exception;
+            }
+            categoryConfig = categoryService.requireActive("OTHER");
+        }
+        category = categoryConfig.getCategoryCode();
+
         //3.创建工单
         Ticket ticket = new Ticket();
         ticket.setTicketNo("TK" + UUID.randomUUID().toString().substring(0,8).toUpperCase());
@@ -146,6 +194,10 @@ public class TicketService {
         ticket.setTitle(ticketCreateRequest.getTitle());
         ticket.setDescription(ticketCreateRequest.getDescription());
         ticket.setCategory(category);
+        ticket.setGroupId(categoryConfig.getGroupId());
+        if (categoryConfig.getGroupId() != null) {
+            groupService.requireActive(categoryConfig.getGroupId());
+        }
         ticket.setStatus(TicketStatus.AI_PROCESSING.name());
         String priority = ticketCreateRequest.getPriority();
         priority = priority == null || priority.isBlank() ? "MEDIUM" : priority;
@@ -175,8 +227,7 @@ public class TicketService {
                 null, TicketStatus.AI_PROCESSING.name(),
                 "用户创建工单，SLA=" + slaHours + "小时");
 
-        //5. AI处理工单
-        //TODO: 调用AI处理工单  ticketId  UserId content (ticketCreateRequest.getDescription())
+        //5. 通过已鉴权业务上下文调用 AI；失败时自动转人工。
         long aiStartedAt = System.currentTimeMillis();
         try{
             String reply = aiService.processTicket(ticket.getId(), ticketCreateRequest.getDescription(), userId);
@@ -212,10 +263,14 @@ public class TicketService {
     //添加工单消息/沟通消息
     @Transactional
     public void addTicketMessage(Long ticketId, MessageRequest messageRequest){
+        contentModerationService.validateUserContent(messageRequest.getContent());
         //1.拿到当前工单信息
         Ticket ticket = ticketMapper.selectById(ticketId);
         if(ticket == null || Integer.valueOf(1).equals(ticket.getDeleted())){
             throw new ApiException(HttpStatus.NOT_FOUND, "该工单不存在");
+        }
+        if (Integer.valueOf(1).equals(ticket.getArchived())) {
+            throw new ApiException(HttpStatus.CONFLICT, "已归档工单不能继续发送消息");
         }
 
         //2.拿到当前登录用户ID
@@ -304,7 +359,10 @@ public class TicketService {
         }
         if ("AGENT".equals(currentUser.getRole())
                 && (currentUser.getId().equals(ticket.getAgentId())
-                || (ticket.getAgentId() == null && "MANUAL_REVIEW".equals(ticket.getStatus())))) {
+                || (currentUser.getAgentGroupId() != null
+                && currentUser.getAgentGroupId().equals(ticket.getGroupId()))
+                || (ticket.getAgentId() == null && ticket.getGroupId() == null
+                && TicketStatus.MANUAL_REVIEW.name().equals(ticket.getStatus())))) {
             return;
         }
         throw new ApiException(HttpStatus.FORBIDDEN, "无权访问该工单");
@@ -313,6 +371,9 @@ public class TicketService {
     private void assertCanSendMessage(Ticket ticket, SysUser currentUser) {
         if ("CLOSED".equals(ticket.getStatus())) {
             throw new ApiException(HttpStatus.CONFLICT, "已关闭工单不能继续发送消息");
+        }
+        if (TicketStatus.REJECTED.name().equals(ticket.getStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "已驳回工单请通过“跟进”补充材料并重新进入人工复核");
         }
         if ("USER".equals(currentUser.getRole()) && ticket.getUserId().equals(currentUser.getId())) {
             return;
@@ -323,6 +384,14 @@ public class TicketService {
             return;
         }
         throw new ApiException(HttpStatus.FORBIDDEN, "无权向该工单发送消息");
+    }
+
+    private String resolveCategoryName(String categoryCode) {
+        return categoryService.list(true).stream()
+                .filter(item -> item.getCategoryCode().equals(categoryCode))
+                .map(TicketCategory::getCategoryName)
+                .findFirst()
+                .orElse(CATEGORY_NAMES.getOrDefault(categoryCode, categoryCode));
     }
 
 }

@@ -19,18 +19,20 @@ public class SaTokenPermissionConfig implements StpInterface {
 
     private static final Map<String, List<String>> ROLE_PERMISSIONS = Map.of(
             "USER", List.of(
-                    "order:query", "ticket:query", "ticket:add", "ticket:message",
+                    "order:query", "ticket:query", "ticket:add", "ticket:message", "ticket:follow-up", "ticket:satisfaction",
                     "faq:query", "ai:chat"
             ),
             "AGENT", List.of(
                     "ticket:query", "ticket:message", "ticket:claim",
-                    "ticket:resolve", "ticket:close", "faq:query", "ai:chat"
+                    "ticket:resolve", "ticket:close", "ticket:follow-up", "ticket:reject",
+                    "faq:query", "stats:query", "report:export", "ai:chat"
             ),
             "ADMIN", List.of(
                     "order:query", "order:query:all",
                     "ticket:query", "ticket:message", "ticket:assign", "ticket:resolve", "ticket:close",
+                    "ticket:follow-up", "ticket:reject", "ticket:archive", "ticket:export", "ticket:priority",
                     "user:manage", "policy:manage", "faq:query", "faq:manage",
-                    "stats:query", "ai:chat"
+                    "stats:query", "group:manage", "category:manage", "report:export", "ai:chat"
             )
     );
 

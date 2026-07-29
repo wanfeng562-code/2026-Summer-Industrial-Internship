@@ -8,4 +8,9 @@ import lombok.Data;
 public class AiChatResponse {
 
     private String content;
+    private String sessionNo;
+
+    public AiChatResponse(String content) {
+        this.content = content;
+    }
 }

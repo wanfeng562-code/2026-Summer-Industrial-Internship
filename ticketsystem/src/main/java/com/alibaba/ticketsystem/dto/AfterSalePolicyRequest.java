@@ -13,7 +13,7 @@ public class AfterSalePolicyRequest {
     private String policyName;
 
     @NotBlank(message = "适用分类不能为空")
-    @Pattern(regexp = "REFUND|LOGISTICS|DAMAGE|INVOICE|OTHER", message = "适用分类不正确")
+    @Size(max = 30, message = "适用分类不能超过30个字符")
     private String category;
 
     @NotBlank(message = "条件类型不能为空")

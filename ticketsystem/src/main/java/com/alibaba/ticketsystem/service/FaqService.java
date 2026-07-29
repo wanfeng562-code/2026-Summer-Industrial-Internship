@@ -6,6 +6,7 @@ import com.alibaba.ticketsystem.mapper.FaqMapper;
 import com.alibaba.ticketsystem.utils.ApiException;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,15 +16,15 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
 public class FaqService {
 
-    private static final List<String> CATEGORIES =
-            List.of("REFUND", "LOGISTICS", "DAMAGE", "INVOICE", "OTHER");
-
     private final FaqMapper faqMapper;
+    private final TicketCategoryService categoryService;
+    private final Validator validator;
 
     public Page<Faq> page(int current, int size, String category, Integer enabled, String keyword) {
         QueryWrapper<Faq> query = baseQuery(category, enabled, keyword)
@@ -50,6 +51,7 @@ public class FaqService {
 
     @Transactional
     public Faq create(FaqRequest request) {
+        validateRequest(request);
         Faq faq = new Faq();
         apply(faq, request);
         faq.setDeleted(0);
@@ -61,6 +63,7 @@ public class FaqService {
 
     @Transactional
     public Faq update(Long id, FaqRequest request) {
+        validateRequest(request);
         Faq faq = get(id);
         apply(faq, request);
         faq.setUpdateTime(LocalDateTime.now());
@@ -74,6 +77,55 @@ public class FaqService {
         faq.setDeleted(1);
         faq.setUpdateTime(LocalDateTime.now());
         faqMapper.updateById(faq);
+    }
+
+    public List<Faq> exportAll() {
+        return faqMapper.selectList(new QueryWrapper<Faq>()
+                .eq("deleted", 0).orderByAsc("id"));
+    }
+
+    @Transactional
+    public int importRows(List<FaqRequest> requests) {
+        int count = 0;
+        for (FaqRequest request : requests) {
+            validateRequest(request);
+            Faq faq = new Faq();
+            apply(faq, request);
+            faq.setDeleted(0);
+            faq.setCreateTime(LocalDateTime.now());
+            faq.setUpdateTime(LocalDateTime.now());
+            faqMapper.insert(faq);
+            count++;
+        }
+        return count;
+    }
+
+    /** 支持标准 CSV 的引号与双引号转义。 */
+    public List<String> parseCsvLine(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean quoted = false;
+        for (int index = 0; index < line.length(); index++) {
+            char character = line.charAt(index);
+            if (character == '"') {
+                if (quoted && index + 1 < line.length() && line.charAt(index + 1) == '"') {
+                    current.append('"');
+                    index++;
+                } else {
+                    quoted = !quoted;
+                }
+            } else if (character == ',' && !quoted) {
+                fields.add(current.toString().trim());
+                current.setLength(0);
+            } else {
+                current.append(character);
+            }
+        }
+        if (quoted) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "CSV 格式错误：引号未闭合");
+        }
+        fields.add(current.toString().trim());
+        return fields;
     }
 
     private QueryWrapper<Faq> baseQuery(String category, Integer enabled, String keyword) {
@@ -106,11 +158,17 @@ public class FaqService {
         faq.setEnabled(request.getEnabled());
     }
 
+    private void validateRequest(FaqRequest request) {
+        var violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "FAQ 数据校验失败：" + violations.iterator().next().getMessage());
+        }
+    }
+
     private String normalizeCategory(String category) {
         String value = category == null ? "" : category.trim().toUpperCase(Locale.ROOT);
-        if (!CATEGORIES.contains(value)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "FAQ分类不正确");
-        }
+        categoryService.requireActive(value);
         return value;
     }
 }

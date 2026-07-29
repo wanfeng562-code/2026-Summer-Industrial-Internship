@@ -15,6 +15,9 @@ public class UserProfileVo {
     private String avatar;
     private String role;
     private Integer reputationScore;
+    private Long agentGroupId;
+    private Boolean online;
+    private LocalDateTime lastLoginTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

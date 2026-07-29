@@ -15,12 +15,13 @@
 
 1. `src/main/resources/static/ticket_system.sql`：创建 `ticket_system` 库和表。
 2. `src/main/resources/static/data.sql`：导入演示账号、订单、工单和策略。
+3. `src/main/resources/static/migrate_full_requirements.sql`：补充账号运维、坐席组、动态分类、归档、满意度、AI 会话和语义检索配置。
 
-Windows MySQL 命令行在执行脚本前先运行 `SET NAMES utf8mb4;`，避免中文演示数据被按本机代码页解析。
+Windows MySQL 命令行应使用 `mysql --default-character-set=utf8mb4 -u root -p` 启动。只运行 `SET NAMES utf8mb4` 不能修正客户端读取 UTF-8 脚本时的本地代码页问题。
 
 已有老师早期数据库且账号密码仍为明文 `123456` 时，只执行
 `src/main/resources/static/migrate_legacy_passwords.sql`。在已有 7-28/A 数据库上继续开发时，再执行
-`src/main/resources/static/migrate_member_c_workflow.sql`；该脚本保留现有业务数据，增加工单操作日志、策略 SLA 字段和 FAQ 表。
+`src/main/resources/static/migrate_member_c_workflow.sql`；随后执行 `migrate_full_requirements.sql`。两者均保留现有业务数据，后者采用 MySQL 8.0 兼容的字段存在性检查并可重复执行。
 
 演示账号密码均为 `123456`：
 
@@ -86,7 +87,7 @@ IDEA 中仅设置 `DB_PASSWORD`、`DASHSCOPE_API_KEY` 即可使用默认模型�
 DASHSCOPE_MODEL=qwen3.7-max-2026-06-08
 ```
 
-`AiConfig.java` 定义客服系统提示词并注册 `TicketAiTools`。工具只提供受后端权限约束的只读查询；模型输出不能直接退款、修改订单、改变工单状态或写数据库。
+`AiConfig.java` 定义客服系统提示词并注册 `TicketAiTools`。工具支持查询当前登录人有权访问的全部订单/工单、按订单号查询订单，以及按工单号或数字 ID 查询工单。请求线程捕获的可信用户 ID 通过 Spring AI `ToolContext` 传入工具，避免流式线程切换后丢失登录身份。工具只提供受后端权限约束的只读查询；模型输出不能直接退款、修改订单、改变工单状态或写数据库。
 
 模型用于普通对话、SSE 流式回复、工单分类、工单 AI 回复和只读 Function Calling。更换模型前应确认该模型在当前百炼账号、业务空间和 Key 所属地域可用，并支持 Function Calling。模型调用可能消耗额度或产生费用。
 

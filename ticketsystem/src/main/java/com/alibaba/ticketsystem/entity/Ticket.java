@@ -43,6 +43,11 @@ public class Ticket implements Serializable {
     private Long agentId;
 
     /**
+     * 归属坐席组
+     */
+    private Long groupId;
+
+    /**
      * 关联订单ID
      */
     private Long orderId;
@@ -96,6 +101,16 @@ public class Ticket implements Serializable {
      * 关闭时间
      */
     private LocalDateTime closeTime;
+
+    /**
+     * 是否已归档
+     */
+    private Integer archived;
+
+    /**
+     * 归档时间
+     */
+    private LocalDateTime archiveTime;
 
     /**
      * 逻辑删除

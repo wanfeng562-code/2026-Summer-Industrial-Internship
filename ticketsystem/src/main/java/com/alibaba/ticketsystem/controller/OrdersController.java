@@ -43,8 +43,10 @@ public class OrdersController {
     @SaCheckPermission("order:query")
     //实现订单分页列表查询
     @GetMapping("/orders/{page}/{pageSize}")
-    public R<?> pageOrdersLegacy(@PathVariable("page") Integer page,
-                                 @PathVariable("pageSize") Integer pageSize){
+    public R<?> pageOrdersLegacy(
+            @PathVariable("page") @Min(value = 1, message = "page必须大于0") Integer page,
+            @PathVariable("pageSize") @Min(value = 1, message = "pageSize必须大于0")
+            @Max(value = 100, message = "pageSize不能超过100") Integer pageSize){
         Page<Orders> po = ordersService.pageOrders(page, pageSize);
         return R.success("订单分页查询成功", po);
     }

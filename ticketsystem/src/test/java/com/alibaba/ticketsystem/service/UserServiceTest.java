@@ -100,7 +100,7 @@ class UserServiceTest {
         assertThat(result.getRole()).isEqualTo("USER");
         assertThat(result.getRoles()).containsExactly("USER");
         assertThat(result.getToken()).isEqualTo("token-value");
-        verify(userMapper, never()).updateById(any(SysUser.class));
+        verify(userMapper).updateById(any(SysUser.class));
     }
 
     @Test
@@ -129,6 +129,19 @@ class UserServiceTest {
                 .isInstanceOfSatisfying(ApiException.class,
                         exception -> assertThat(exception.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
         verify(authSessionService, never()).login(any());
+    }
+
+    @Test
+    void deletedAccountCannotLoginEvenWithCorrectPassword() {
+        SysUser user = activeUser(4L, "deleted_user", "USER", "123456");
+        user.setDeleted(1);
+        when(userMapper.getUserByUsername("deleted_user")).thenReturn(user);
+
+        assertThatThrownBy(() -> userService.loginSysUser(loginRequest("deleted_user", "123456")))
+                .isInstanceOfSatisfying(ApiException.class,
+                        exception -> assertThat(exception.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+        verify(authSessionService, never()).login(any());
+        verify(userMapper, never()).updateById(any(SysUser.class));
     }
 
     private LoginRequest loginRequest(String username, String password) {

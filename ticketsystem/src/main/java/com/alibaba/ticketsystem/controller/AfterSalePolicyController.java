@@ -8,6 +8,7 @@ import com.alibaba.ticketsystem.utils.R;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -25,7 +26,7 @@ public class AfterSalePolicyController {
     public R<?> page(
             @RequestParam(defaultValue = "1") @Min(1) Integer current,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) Integer size,
-            @RequestParam(required = false) String category,
+            @RequestParam(required = false) @Size(max = 30) String category,
             @RequestParam(required = false) Integer enabled) {
         return R.success("售后策略分页查询成功",
                 policyService.page(current, size, category, enabled));

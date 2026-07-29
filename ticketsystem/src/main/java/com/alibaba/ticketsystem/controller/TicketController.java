@@ -6,19 +6,29 @@ import com.alibaba.ticketsystem.dto.TicketAssignRequest;
 import com.alibaba.ticketsystem.dto.TicketCloseRequest;
 import com.alibaba.ticketsystem.dto.TicketCreateRequest;
 import com.alibaba.ticketsystem.dto.TicketResolveRequest;
+import com.alibaba.ticketsystem.dto.TicketFollowUpRequest;
+import com.alibaba.ticketsystem.dto.TicketRejectRequest;
+import com.alibaba.ticketsystem.dto.TicketSatisfactionRequest;
+import com.alibaba.ticketsystem.dto.TicketPriorityRequest;
 import com.alibaba.ticketsystem.entity.Ticket;
 import com.alibaba.ticketsystem.service.TicketOperationLogService;
 import com.alibaba.ticketsystem.service.TicketService;
+import com.alibaba.ticketsystem.service.TicketSatisfactionService;
 import com.alibaba.ticketsystem.service.TicketWorkflowService;
 import com.alibaba.ticketsystem.utils.R;
+import com.alibaba.ticketsystem.utils.CsvUtils;
 import com.alibaba.ticketsystem.vo.TicketVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * <p>
@@ -36,6 +46,7 @@ public class TicketController {
     private final TicketService ticketService;
     private final TicketWorkflowService workflowService;
     private final TicketOperationLogService operationLogService;
+    private final TicketSatisfactionService satisfactionService;
 
     /*
     *工单分页列表查询
@@ -45,9 +56,38 @@ public class TicketController {
     @GetMapping("/tickets")
     public R<?> pageTickets(
             @RequestParam(value = "current", defaultValue = "1") @Min(1) Integer current,
-            @RequestParam(value = "size", defaultValue = "10") @Min(1) @Max(100) Integer size) {
-        Page<TicketVo> pt = ticketService.pageTickets(current,size);
+            @RequestParam(value = "size", defaultValue = "10") @Min(1) @Max(100) Integer size,
+            @RequestParam(required = false) @Size(max = 200) String keyword,
+            @RequestParam(required = false) @Size(max = 30) String status,
+            @RequestParam(required = false) @Size(max = 30) String category,
+            @RequestParam(required = false) @Size(max = 10) String priority,
+            @RequestParam(defaultValue = "false") boolean archived) {
+        Page<TicketVo> pt = ticketService.pageTickets(current, size, keyword, status, category, priority, archived);
         return R.success("工单分页列表查询成功", pt);
+    }
+
+    @SaCheckPermission("ticket:export")
+    @GetMapping("/tickets/export")
+    public void exportTickets(@RequestParam(required = false) @Size(max = 200) String keyword,
+                              @RequestParam(required = false) @Size(max = 30) String status,
+                              @RequestParam(required = false) @Size(max = 30) String category,
+                              @RequestParam(required = false) @Size(max = 10) String priority,
+                              @RequestParam(defaultValue = "false") boolean archived,
+                              HttpServletResponse response) throws IOException {
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=tickets.csv");
+        var writer = response.getWriter();
+        writer.write('\ufeff');
+        writer.write("工单编号,标题,分类,状态,优先级,用户,客服,创建时间\n");
+        for (TicketVo ticket : ticketService.exportTickets(keyword, status, category, priority, archived)) {
+            writer.write(CsvUtils.cell(ticket.getTicketNo()) + "," + CsvUtils.cell(ticket.getTitle()) + ","
+                    + CsvUtils.cell(ticket.getCategoryName()) + "," + CsvUtils.cell(ticket.getStatusName()) + ","
+                    + CsvUtils.cell(ticket.getPriority()) + "," + CsvUtils.cell(ticket.getUsername()) + ","
+                    + CsvUtils.cell(ticket.getAgentName()) + ","
+                    + CsvUtils.cell(String.valueOf(ticket.getCreateTime())) + "\n");
+        }
+        writer.flush();
     }
 
     //工单详情
@@ -114,6 +154,42 @@ public class TicketController {
     public R<?> close(@PathVariable Long ticketId, @Valid @RequestBody TicketCloseRequest request) {
         workflowService.close(ticketId, request);
         return R.success("工单已关闭");
+    }
+
+    @SaCheckPermission("ticket:follow-up")
+    @PostMapping("/tickets/{ticketId}/follow-ups")
+    public R<?> followUp(@PathVariable Long ticketId, @Valid @RequestBody TicketFollowUpRequest request) {
+        workflowService.followUp(ticketId, request);
+        return R.success("工单跟进记录已保存");
+    }
+
+    @SaCheckPermission("ticket:satisfaction")
+    @PostMapping("/tickets/{ticketId}/satisfaction")
+    public R<?> submitSatisfaction(@PathVariable Long ticketId,
+                                   @Valid @RequestBody TicketSatisfactionRequest request) {
+        return R.success("满意度评价已保存", satisfactionService.submit(ticketId, request));
+    }
+
+    @SaCheckPermission("ticket:reject")
+    @PostMapping("/tickets/{ticketId}/reject")
+    public R<?> reject(@PathVariable Long ticketId, @Valid @RequestBody TicketRejectRequest request) {
+        workflowService.reject(ticketId, request);
+        return R.success("工单已驳回");
+    }
+
+    @SaCheckPermission("ticket:archive")
+    @PostMapping("/tickets/{ticketId}/archive")
+    public R<?> archive(@PathVariable Long ticketId) {
+        workflowService.archive(ticketId);
+        return R.success("工单已归档");
+    }
+
+    @SaCheckPermission("ticket:priority")
+    @PutMapping("/tickets/{ticketId}/priority")
+    public R<?> adjustPriority(@PathVariable Long ticketId,
+                               @Valid @RequestBody TicketPriorityRequest request) {
+        workflowService.adjustPriority(ticketId, request);
+        return R.success("工单优先级已更新");
     }
 
     @SaCheckPermission("ticket:message")

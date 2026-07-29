@@ -32,6 +32,10 @@ public class SysUser {
 
     private Integer reputationScore;
 
+    private Long agentGroupId;
+
+    private LocalDateTime lastLoginTime;
+
     private Integer deleted;
 
     private LocalDateTime createTime;

@@ -4,7 +4,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -12,7 +11,7 @@ import lombok.Data;
 public class FaqRequest {
 
     @NotBlank(message = "FAQ分类不能为空")
-    @Pattern(regexp = "REFUND|LOGISTICS|DAMAGE|INVOICE|OTHER", message = "FAQ分类不正确")
+    @Size(max = 30, message = "FAQ分类不能超过30个字符")
     private String category;
 
     @NotBlank(message = "问题不能为空")

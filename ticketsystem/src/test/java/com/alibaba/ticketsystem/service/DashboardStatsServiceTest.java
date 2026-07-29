@@ -28,21 +28,23 @@ class DashboardStatsServiceTest {
                 ticket("AI_PROCESSING", "LOGISTICS", 1, 0),
                 ticket("MANUAL_REVIEW", "REFUND", 0, 1),
                 ticket("RESOLVED", "REFUND", 0, 0),
-                ticket("CLOSED", "OTHER", 0, 0)
+                ticket("CLOSED", "OTHER", 0, 0),
+                ticket("CLOSED", "QUALITY", 0, 0)
         ));
 
         DashboardStatsVo result = service.currentScopeStats();
 
-        assertThat(result.getTotal()).isEqualTo(4);
+        assertThat(result.getTotal()).isEqualTo(5);
         assertThat(result.getAiProcessing()).isEqualTo(1);
         assertThat(result.getManualReview()).isEqualTo(1);
         assertThat(result.getResolved()).isEqualTo(1);
-        assertThat(result.getClosed()).isEqualTo(1);
+        assertThat(result.getClosed()).isEqualTo(2);
         assertThat(result.getSlaWarning()).isEqualTo(1);
         assertThat(result.getSlaEscalated()).isEqualTo(1);
         assertThat(result.getCategoryCounts()).containsEntry("REFUND", 2L)
                 .containsEntry("LOGISTICS", 1L)
-                .containsEntry("DAMAGE", 0L);
+                .containsEntry("DAMAGE", 0L)
+                .containsEntry("QUALITY", 1L);
     }
 
     private Ticket ticket(String status, String category, int warning, int escalated) {

@@ -1,5 +1,6 @@
 package com.alibaba.ticketsystem.service;
 
+import com.alibaba.ticketsystem.entity.SysUser;
 import com.alibaba.ticketsystem.utils.ApiException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -14,11 +15,13 @@ class AIServiceTest {
 
     private final AiModelClient modelClient = mock(AiModelClient.class);
     private final TicketAiContextService contextService = mock(TicketAiContextService.class);
-    private final AIService aiService = new AIService(modelClient, contextService);
+    private final UserService userService = mock(UserService.class);
+    private final AIService aiService = new AIService(modelClient, contextService, userService);
 
     @Test
     void ordinaryChatReturnsModelContent() {
-        when(modelClient.generate("如何申请售后？")).thenReturn("请在订单详情中发起售后申请。");
+        when(userService.requireCurrentUser()).thenReturn(user());
+        when(modelClient.generate("如何申请售后？", 10L)).thenReturn("请在订单详情中发起售后申请。");
 
         assertThat(aiService.chat("如何申请售后？"))
                 .isEqualTo("请在订单详情中发起售后申请。");
@@ -42,7 +45,8 @@ class AIServiceTest {
 
     @Test
     void modelFailureReturns503WithoutLeakingCause() {
-        when(modelClient.generate("测试")).thenThrow(new RuntimeException("secret endpoint detail"));
+        when(userService.requireCurrentUser()).thenReturn(user());
+        when(modelClient.generate("测试", 10L)).thenThrow(new RuntimeException("secret endpoint detail"));
 
         assertThatThrownBy(() -> aiService.chat("测试"))
                 .isInstanceOfSatisfying(ApiException.class, exception -> {
@@ -53,9 +57,17 @@ class AIServiceTest {
 
     @Test
     void streamChatForwardsIncrementalChunks() {
-        when(modelClient.stream("流式测试")).thenReturn(Flux.just("第一段", "第二段"));
+        when(userService.requireCurrentUser()).thenReturn(user());
+        when(modelClient.stream("流式测试", 10L)).thenReturn(Flux.just("第一段", "第二段"));
 
         assertThat(aiService.streamChat("流式测试").collectList().block())
                 .containsExactly("第一段", "第二段");
+    }
+
+    private SysUser user() {
+        SysUser user = new SysUser();
+        user.setId(10L);
+        user.setRole("USER");
+        return user;
     }
 }

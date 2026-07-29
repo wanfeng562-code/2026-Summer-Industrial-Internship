@@ -36,6 +36,9 @@ class TicketServiceAuthorizationTest {
     @Mock private TicketOperationLogService operationLogService;
     @Mock private AfterSalePolicyService policyService;
     @Mock private AiProcessLogService aiProcessLogService;
+    @Mock private TicketCategoryService categoryService;
+    @Mock private AgentGroupService groupService;
+    @Mock private ContentModerationService contentModerationService;
 
     private TicketService ticketService;
 
@@ -52,7 +55,10 @@ class TicketServiceAuthorizationTest {
                 userService,
                 operationLogService,
                 policyService,
-                aiProcessLogService);
+                aiProcessLogService,
+                categoryService,
+                groupService,
+                contentModerationService);
     }
 
     @Test
@@ -78,5 +84,68 @@ class TicketServiceAuthorizationTest {
                 .isInstanceOfSatisfying(ApiException.class,
                         exception -> assertThat(exception.getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
         verify(messageMapper, never()).insert(org.mockito.ArgumentMatchers.<TicketMessage>any());
+    }
+
+    @Test
+    void archivedTicketRejectsNewMessages() {
+        Ticket ticket = ownedTicket("REJECTED");
+        ticket.setArchived(1);
+        when(ticketMapper.selectById(10L)).thenReturn(ticket);
+        MessageRequest request = new MessageRequest();
+        request.setContent("继续补充");
+
+        assertConflict(() -> ticketService.addTicketMessage(10L, request));
+        verify(messageMapper, never()).insert(org.mockito.ArgumentMatchers.<TicketMessage>any());
+    }
+
+    @Test
+    void rejectedTicketRequiresAuditedFollowUpAction() {
+        when(ticketMapper.selectById(10L)).thenReturn(ownedTicket("REJECTED"));
+        when(userService.requireCurrentUser()).thenReturn(user());
+        MessageRequest request = new MessageRequest();
+        request.setContent("继续补充");
+
+        assertConflict(() -> ticketService.addTicketMessage(10L, request));
+        verify(messageMapper, never()).insert(org.mockito.ArgumentMatchers.<TicketMessage>any());
+    }
+
+    @Test
+    void unassignedTicketInAnotherGroupIsNotVisibleToAgent() {
+        Ticket ticket = ownedTicket("MANUAL_REVIEW");
+        ticket.setGroupId(20L);
+        when(ticketMapper.selectById(10L)).thenReturn(ticket);
+        SysUser agent = new SysUser();
+        agent.setId(2L);
+        agent.setRole("AGENT");
+        agent.setAgentGroupId(10L);
+        when(userService.requireCurrentUser()).thenReturn(agent);
+
+        assertThatThrownBy(() -> ticketService.getTicketDetail(10L))
+                .isInstanceOfSatisfying(ApiException.class,
+                        exception -> assertThat(exception.getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+        verify(messageService, never()).getTicketMessageList(10L);
+    }
+
+    private Ticket ownedTicket(String status) {
+        Ticket ticket = new Ticket();
+        ticket.setId(10L);
+        ticket.setUserId(4L);
+        ticket.setStatus(status);
+        ticket.setArchived(0);
+        ticket.setDeleted(0);
+        return ticket;
+    }
+
+    private SysUser user() {
+        SysUser user = new SysUser();
+        user.setId(4L);
+        user.setRole("USER");
+        return user;
+    }
+
+    private void assertConflict(Runnable action) {
+        assertThatThrownBy(action::run)
+                .isInstanceOfSatisfying(ApiException.class,
+                        exception -> assertThat(exception.getStatus()).isEqualTo(HttpStatus.CONFLICT));
     }
 }

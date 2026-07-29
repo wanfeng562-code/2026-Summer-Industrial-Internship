@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class AfterSalePolicyServiceTest {
@@ -33,7 +34,7 @@ class AfterSalePolicyServiceTest {
         AfterSalePolicy fallback = policy("ALWAYS", null, null, null, 48);
         when(policyMapper.selectList(any(QueryWrapper.class)))
                 .thenReturn(List.of(smallRefund, fallback));
-        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper);
+        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper, mock(TicketCategoryService.class));
 
         assertThat(service.resolveSlaHours(
                 "REFUND", new BigDecimal("30"), 90, "MEDIUM")).isEqualTo(12);
@@ -46,7 +47,7 @@ class AfterSalePolicyServiceTest {
         AfterSalePolicy fallback = policy("ALWAYS", null, null, null, 36);
         when(policyMapper.selectList(any(QueryWrapper.class)))
                 .thenReturn(List.of(highReputation, fallback));
-        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper);
+        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper, mock(TicketCategoryService.class));
 
         assertThat(service.resolveSlaHours(
                 "LOGISTICS", new BigDecimal("100"), 70, "HIGH")).isEqualTo(36);
@@ -56,7 +57,7 @@ class AfterSalePolicyServiceTest {
     @SuppressWarnings("unchecked")
     void priorityDefaultIsUsedWithoutMatchedPolicy() {
         when(policyMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
-        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper);
+        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper, mock(TicketCategoryService.class));
 
         assertThat(service.resolveSlaHours(
                 "OTHER", new BigDecimal("100"), 80, "URGENT")).isEqualTo(4);
@@ -64,7 +65,7 @@ class AfterSalePolicyServiceTest {
 
     @Test
     void invalidAmountRangeReturns400() {
-        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper);
+        AfterSalePolicyService service = new AfterSalePolicyService(policyMapper, mock(TicketCategoryService.class));
         AfterSalePolicyRequest request = validRequest();
         request.setMinAmount(new BigDecimal("100"));
         request.setMaxAmount(new BigDecimal("10"));

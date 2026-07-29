@@ -23,10 +23,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AfterSalePolicyService {
 
-    private static final List<String> CATEGORIES =
-            List.of("REFUND", "LOGISTICS", "DAMAGE", "INVOICE", "OTHER");
-
     private final AfterSalePolicyMapper policyMapper;
+    private final TicketCategoryService categoryService;
 
     public Page<AfterSalePolicy> page(int current, int size, String category, Integer enabled) {
         QueryWrapper<AfterSalePolicy> query = new QueryWrapper<AfterSalePolicy>()
@@ -145,9 +143,7 @@ public class AfterSalePolicyService {
 
     private String normalizeCategory(String category) {
         String value = category == null ? "" : category.trim().toUpperCase(Locale.ROOT);
-        if (!CATEGORIES.contains(value)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "适用分类不正确");
-        }
+        categoryService.requireActive(value);
         return value;
     }
 

@@ -29,7 +29,7 @@ public class LoginController {
         return R.success("用户注册成功", user);
     }
 
-    @RequestMapping(value = "/user/logout", method = {RequestMethod.POST, RequestMethod.GET})
+    @PostMapping("/user/logout")
     public R<?> logout() {
         userService.logout();
         return R.success("用户成功退出系统");

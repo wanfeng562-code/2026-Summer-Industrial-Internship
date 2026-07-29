@@ -4,6 +4,7 @@ import com.alibaba.ticketsystem.dto.FaqRequest;
 import com.alibaba.ticketsystem.entity.Faq;
 import com.alibaba.ticketsystem.mapper.FaqMapper;
 import com.alibaba.ticketsystem.utils.ApiException;
+import jakarta.validation.Validation;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +18,10 @@ import static org.mockito.Mockito.when;
 class FaqServiceTest {
 
     private final FaqMapper faqMapper = mock(FaqMapper.class);
-    private final FaqService service = new FaqService(faqMapper);
+    private final FaqService service = new FaqService(
+            faqMapper,
+            mock(TicketCategoryService.class),
+            Validation.buildDefaultValidatorFactory().getValidator());
 
     @Test
     void createsNormalizedFaq() {
@@ -50,6 +54,18 @@ class FaqServiceTest {
         assertThatThrownBy(() -> service.update(1L, request()))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    void importRejectsRowsThatBypassControllerValidation() {
+        FaqRequest invalid = request();
+        invalid.setQuestion(" ");
+
+        assertThatThrownBy(() -> service.importRows(java.util.List.of(invalid)))
+                .isInstanceOfSatisfying(ApiException.class, exception -> {
+                    assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(exception.getMessage()).contains("问题不能为空");
+                });
     }
 
     private FaqRequest request() {

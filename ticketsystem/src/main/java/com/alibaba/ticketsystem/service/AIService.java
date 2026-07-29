@@ -1,5 +1,6 @@
 package com.alibaba.ticketsystem.service;
 
+import com.alibaba.ticketsystem.entity.SysUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.alibaba.ticketsystem.utils.ApiException;
@@ -21,14 +22,17 @@ public class AIService {
 
     private final AiModelClient modelClient;
     private final TicketAiContextService contextService;
+    private final UserService userService;
 
     public String chat(String message) {
-        return callAI(message);
+        SysUser currentUser = userService.requireCurrentUser();
+        return callAI(message, currentUser.getId());
     }
 
     public Flux<String> streamChat(String message) {
+        SysUser currentUser = userService.requireCurrentUser();
         log.info("[AI] stream request promptLength={}", message.length());
-        return modelClient.stream(message)
+        return modelClient.stream(message, currentUser.getId())
                 .timeout(Duration.ofSeconds(60))
                 .filter(chunk -> chunk != null && !chunk.isEmpty())
                 .onErrorMap(exception -> {
@@ -41,9 +45,15 @@ public class AIService {
     }
 
     public String callAI(String prompt) {
+        return callAI(prompt, null);
+    }
+
+    private String callAI(String prompt, Long currentUserId) {
         log.info("[AI] request promptLength={}", prompt.length());
         try {
-            String result = modelClient.generate(prompt);
+            String result = currentUserId == null
+                    ? modelClient.generate(prompt)
+                    : modelClient.generate(prompt, currentUserId);
             if (result == null || result.isBlank()) {
                 throw new IllegalStateException("模型返回内容为空");
             }
@@ -82,6 +92,6 @@ public class AIService {
 
                 用户消息：%s
                 """, businessContext, description);
-        return callAI(prompt);
+        return callAI(prompt, userId);
     }
 }

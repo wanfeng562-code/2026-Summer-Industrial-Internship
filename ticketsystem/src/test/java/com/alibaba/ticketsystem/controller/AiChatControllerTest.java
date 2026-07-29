@@ -2,6 +2,9 @@ package com.alibaba.ticketsystem.controller;
 
 import com.alibaba.ticketsystem.dto.AiChatRequest;
 import com.alibaba.ticketsystem.service.AIService;
+import com.alibaba.ticketsystem.service.ContentModerationService;
+import com.alibaba.ticketsystem.service.AiChatHistoryService;
+import com.alibaba.ticketsystem.entity.AiChatSession;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -17,6 +20,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -29,7 +33,7 @@ class AiChatControllerTest {
     void streamProducesCompleteSseFramesThatPreserveNewlines() {
         AIService aiService = mock(AIService.class);
         when(aiService.streamChat("测试")).thenReturn(Flux.just("你", "好\n世界"));
-        AiChatController controller = new AiChatController(aiService);
+        AiChatController controller = new AiChatController(aiService, mock(ContentModerationService.class), historyService());
         HttpServletResponse response = mock(HttpServletResponse.class);
         AiChatRequest request = new AiChatRequest();
         request.setMessage("测试");
@@ -37,25 +41,25 @@ class AiChatControllerTest {
         List<ServerSentEvent<String>> frames = controller.stream(request, response).collectList().block();
 
         assertThat(frames).extracting(ServerSentEvent::event)
-                .containsExactly("message", "message", "done");
+                .containsExactly("session", "message", "message", "done");
         assertThat(frames).extracting(ServerSentEvent::data)
-                .containsExactly("你", "好\n世界", "[DONE]");
+                .containsExactly("session-test", "你", "好\n世界", "[DONE]");
     }
 
     @Test
     void streamFailureIsConvertedToVisibleErrorFrame() {
         AIService aiService = mock(AIService.class);
         when(aiService.streamChat("测试")).thenReturn(Flux.error(new IllegalStateException("upstream")));
-        AiChatController controller = new AiChatController(aiService);
+        AiChatController controller = new AiChatController(aiService, mock(ContentModerationService.class), historyService());
         HttpServletResponse response = mock(HttpServletResponse.class);
         AiChatRequest request = new AiChatRequest();
         request.setMessage("测试");
 
         List<ServerSentEvent<String>> frames = controller.stream(request, response).collectList().block();
 
-        assertThat(frames).extracting(ServerSentEvent::event).containsExactly("error");
+        assertThat(frames).extracting(ServerSentEvent::event).containsExactly("session", "error");
         assertThat(frames).extracting(ServerSentEvent::data)
-                .containsExactly("AI服务暂时不可用，请稍后重试");
+                .containsExactly("session-test", "AI服务暂时不可用，请稍后重试");
     }
 
     @Test
@@ -63,7 +67,7 @@ class AiChatControllerTest {
         AIService aiService = mock(AIService.class);
         when(aiService.streamChat("测试")).thenReturn(Flux.just("hello", "!"));
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(new AiChatController(aiService))
+                .standaloneSetup(new AiChatController(aiService, mock(ContentModerationService.class), historyService()))
                 .build();
 
         MvcResult initialResult = mockMvc.perform(post("/ai/chat/stream")
@@ -78,8 +82,19 @@ class AiChatControllerTest {
                 .andReturn();
 
         assertThat(completedResult.getResponse().getContentAsString(StandardCharsets.UTF_8))
-                .isEqualTo("event:message\ndata:hello\n\n"
+                .isEqualTo("event:session\ndata:session-test\n\n"
+                        + "event:message\ndata:hello\n\n"
                         + "event:message\ndata:!\n\n"
                         + "event:done\ndata:[DONE]\n\n");
+    }
+
+    private static AiChatHistoryService historyService() {
+        AiChatHistoryService service = mock(AiChatHistoryService.class);
+        AiChatSession session = new AiChatSession();
+        session.setId(1L);
+        session.setSessionNo("session-test");
+        when(service.recordUserMessage(any(), any())).thenReturn(session);
+        when(service.buildModelPrompt("session-test")).thenReturn("测试");
+        return service;
     }
 }

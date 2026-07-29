@@ -2,6 +2,8 @@ package com.alibaba.ticketsystem.service;
 
 import com.alibaba.ticketsystem.dto.TicketAssignRequest;
 import com.alibaba.ticketsystem.dto.TicketCloseRequest;
+import com.alibaba.ticketsystem.dto.TicketFollowUpRequest;
+import com.alibaba.ticketsystem.dto.TicketPriorityRequest;
 import com.alibaba.ticketsystem.dto.TicketResolveRequest;
 import com.alibaba.ticketsystem.entity.SysUser;
 import com.alibaba.ticketsystem.entity.Ticket;
@@ -38,13 +40,15 @@ class TicketWorkflowServiceTest {
     private UserService userService;
     @Mock
     private TicketOperationLogService logService;
+    @Mock
+    private ContentModerationService contentModerationService;
 
     private TicketWorkflowService workflowService;
 
     @BeforeEach
     void setUp() {
         workflowService = new TicketWorkflowService(
-                ticketMapper, messageMapper, userMapper, userService, logService);
+                ticketMapper, messageMapper, userMapper, userService, logService, contentModerationService);
     }
 
     @Test
@@ -143,6 +147,49 @@ class TicketWorkflowServiceTest {
 
         verify(logService).record(1L, "ASSIGN", 1L, "ADMIN",
                 "MANUAL_REVIEW", "MANUAL_REVIEW", "分配客服：张客服（ID=2）");
+    }
+
+    @Test
+    void adminCannotAssignTicketToAgentFromAnotherGroup() {
+        Ticket current = ticket(1L, 4L, null, "MANUAL_REVIEW");
+        current.setGroupId(8L);
+        when(ticketMapper.selectById(1L)).thenReturn(current);
+        when(userService.requireCurrentUser()).thenReturn(user(1L, "ADMIN"));
+        SysUser target = user(2L, "AGENT");
+        target.setAgentGroupId(9L);
+        when(userMapper.selectById(2L)).thenReturn(target);
+        TicketAssignRequest request = new TicketAssignRequest();
+        request.setAgentId(2L);
+
+        assertStatus(() -> workflowService.assign(1L, request), HttpStatus.BAD_REQUEST);
+        verify(ticketMapper, never()).assignAgent(anyLong(), anyLong());
+    }
+
+    @Test
+    void archivedTicketCannotBeReopenedByFollowUp() {
+        Ticket archived = ticket(1L, 4L, 2L, "REJECTED");
+        archived.setArchived(1);
+        when(ticketMapper.selectById(1L)).thenReturn(archived);
+        when(userService.requireCurrentUser()).thenReturn(user(4L, "USER"));
+        TicketFollowUpRequest request = new TicketFollowUpRequest();
+        request.setContent("补充凭证");
+
+        assertStatus(() -> workflowService.followUp(1L, request), HttpStatus.CONFLICT);
+        verify(messageMapper, never()).insert(any(TicketMessage.class));
+    }
+
+    @Test
+    void archivedTicketPriorityIsImmutable() {
+        Ticket archived = ticket(1L, 4L, 2L, "CLOSED");
+        archived.setArchived(1);
+        archived.setPriority("LOW");
+        when(ticketMapper.selectById(1L)).thenReturn(archived);
+        when(userService.requireCurrentUser()).thenReturn(user(1L, "ADMIN"));
+        TicketPriorityRequest request = new TicketPriorityRequest();
+        request.setPriority("HIGH");
+
+        assertStatus(() -> workflowService.adjustPriority(1L, request), HttpStatus.CONFLICT);
+        verify(ticketMapper, never()).updatePriorityById(anyLong(), anyString());
     }
 
     private void assertStatus(Runnable action, HttpStatus status) {

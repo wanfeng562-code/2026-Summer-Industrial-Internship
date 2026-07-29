@@ -15,6 +15,8 @@ public class TicketVo {
     private String userNickname;
     private Long agentId;
     private String agentName;
+    private Long groupId;
+    private String groupName;
     private Long orderId;
     private String orderNo;
     private String title;
@@ -29,6 +31,8 @@ public class TicketVo {
     private LocalDateTime slaDeadline;
     private LocalDateTime resolveTime;
     private LocalDateTime closeTime;
+    private Integer archived;
+    private LocalDateTime archiveTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
     private List<TicketMessageVo> messages;

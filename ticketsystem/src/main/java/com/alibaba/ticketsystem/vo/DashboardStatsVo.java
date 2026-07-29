@@ -12,6 +12,7 @@ public class DashboardStatsVo {
     private long aiProcessing;
     private long manualReview;
     private long resolved;
+    private long rejected;
     private long closed;
     private long slaWarning;
     private long slaEscalated;

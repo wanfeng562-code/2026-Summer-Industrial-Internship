@@ -1,6 +1,7 @@
 package com.alibaba.ticketsystem.service;
 
 import com.alibaba.ticketsystem.dto.LoginRequest;
+import com.alibaba.ticketsystem.dto.PasswordResetRequest;
 import com.alibaba.ticketsystem.dto.ProfileUpdateRequest;
 import com.alibaba.ticketsystem.dto.RegisterRequest;
 import com.alibaba.ticketsystem.entity.SysUser;
@@ -32,17 +33,19 @@ public class UserService {
     @Transactional
     public UserVo loginSysUser(LoginRequest loginRequest){
         SysUser sysUser = sysUserMapper.getUserByUsername(loginRequest.getUsername());
-        if(sysUser == null || !passwordMatches(loginRequest.getPassword(), sysUser)){
+        if(sysUser == null || Integer.valueOf(1).equals(sysUser.getDeleted())
+                || !passwordMatches(loginRequest.getPassword(), sysUser)){
             throw new ApiException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
 
         // 兼容旧数据库中的演示明文密码：首次成功登录后立即升级为 BCrypt。
         if (!isBcryptHash(sysUser.getPassword())) {
             sysUser.setPassword(passwordEncoder.encode(loginRequest.getPassword()));
-            sysUser.setUpdateTime(LocalDateTime.now());
-            sysUserMapper.updateById(sysUser);
         }
 
+        sysUser.setLastLoginTime(LocalDateTime.now());
+        sysUser.setUpdateTime(LocalDateTime.now());
+        sysUserMapper.updateById(sysUser);
         authSessionService.login(sysUser.getId());
         UserVo userVo = new UserVo();
         userVo.setId(sysUser.getId());
@@ -117,11 +120,50 @@ public class UserService {
         return result;
     }
 
+    @Transactional
+    public void resetPassword(Long userId, PasswordResetRequest request) {
+        requireAdmin();
+        SysUser user = requireUser(userId);
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setUpdateTime(LocalDateTime.now());
+        sysUserMapper.updateById(user);
+        authSessionService.kickout(userId);
+    }
+
+    public void kickoutUser(Long userId) {
+        SysUser currentUser = requireAdmin();
+        if (currentUser.getId().equals(userId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "不能强制下线当前管理员账号");
+        }
+        requireUser(userId);
+        authSessionService.kickout(userId);
+    }
+
     public SysUser requireCurrentUser() {
         Long userId = authSessionService.getCurrentUserId();
+        return requireActiveUser(userId);
+    }
+
+    /**
+     * 供已经在请求线程完成身份捕获的内部服务再次加载用户。
+     * 调用方不得使用客户端传入的用户 ID。
+     */
+    public SysUser requireActiveUser(Long userId) {
+        return requireUser(userId);
+    }
+
+    private SysUser requireAdmin() {
+        SysUser currentUser = requireCurrentUser();
+        if (!"ADMIN".equals(currentUser.getRole())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "仅管理员可执行此操作");
+        }
+        return currentUser;
+    }
+
+    private SysUser requireUser(Long userId) {
         SysUser user = sysUserMapper.selectById(userId);
         if (user == null || Integer.valueOf(1).equals(user.getDeleted())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "当前登录用户不可用");
+            throw new ApiException(HttpStatus.NOT_FOUND, "用户不存在或已删除");
         }
         return user;
     }
@@ -155,6 +197,9 @@ public class UserService {
         vo.setAvatar(user.getAvatar());
         vo.setRole(user.getRole());
         vo.setReputationScore(user.getReputationScore());
+        vo.setAgentGroupId(user.getAgentGroupId());
+        vo.setLastLoginTime(user.getLastLoginTime());
+        vo.setOnline(authSessionService.isLogin(user.getId()));
         vo.setCreateTime(user.getCreateTime());
         vo.setUpdateTime(user.getUpdateTime());
         return vo;

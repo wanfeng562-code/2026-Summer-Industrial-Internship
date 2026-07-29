@@ -3,6 +3,9 @@ package com.alibaba.ticketsystem.service;
 import com.alibaba.ticketsystem.domain.TicketStatus;
 import com.alibaba.ticketsystem.dto.TicketAssignRequest;
 import com.alibaba.ticketsystem.dto.TicketCloseRequest;
+import com.alibaba.ticketsystem.dto.TicketFollowUpRequest;
+import com.alibaba.ticketsystem.dto.TicketRejectRequest;
+import com.alibaba.ticketsystem.dto.TicketPriorityRequest;
 import com.alibaba.ticketsystem.dto.TicketResolveRequest;
 import com.alibaba.ticketsystem.entity.SysUser;
 import com.alibaba.ticketsystem.entity.Ticket;
@@ -27,6 +30,7 @@ public class TicketWorkflowService {
     private final SysUserMapper userMapper;
     private final UserService userService;
     private final TicketOperationLogService operationLogService;
+    private final ContentModerationService contentModerationService;
 
     @Transactional
     public void claim(Long ticketId) {
@@ -34,6 +38,9 @@ public class TicketWorkflowService {
         SysUser operator = userService.requireCurrentUser();
         requireRole(operator, "AGENT", "只有客服可以接单");
         requireStatus(ticket, TicketStatus.MANUAL_REVIEW);
+        if (ticket.getGroupId() != null && !ticket.getGroupId().equals(operator.getAgentGroupId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "该工单已分配给其他坐席组");
+        }
 
         if (operator.getId().equals(ticket.getAgentId())) {
             throw new ApiException(HttpStatus.CONFLICT, "该工单已由当前客服接取");
@@ -58,6 +65,9 @@ public class TicketWorkflowService {
         SysUser agent = userMapper.selectById(request.getAgentId());
         if (agent == null || Integer.valueOf(1).equals(agent.getDeleted()) || !"AGENT".equals(agent.getRole())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "目标客服不存在或不可用");
+        }
+        if (ticket.getGroupId() != null && !ticket.getGroupId().equals(agent.getAgentGroupId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "目标客服不属于该工单负责坐席组");
         }
         if (request.getAgentId().equals(ticket.getAgentId())) {
             throw new ApiException(HttpStatus.CONFLICT, "工单已经分配给该客服");
@@ -107,6 +117,78 @@ public class TicketWorkflowService {
     }
 
     @Transactional
+    public void followUp(Long ticketId, TicketFollowUpRequest request) {
+        contentModerationService.validateUserContent(request.getContent());
+        Ticket ticket = requireTicket(ticketId);
+        SysUser operator = userService.requireCurrentUser();
+        requireNotArchived(ticket);
+        if (TicketStatus.CLOSED.name().equals(ticket.getStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "已关闭工单不能继续跟进");
+        }
+        boolean owner = "USER".equals(operator.getRole()) && operator.getId().equals(ticket.getUserId());
+        boolean handler = "ADMIN".equals(operator.getRole())
+                || ("AGENT".equals(operator.getRole()) && operator.getId().equals(ticket.getAgentId()));
+        if (!owner && !handler) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "无权跟进该工单");
+        }
+        String before = ticket.getStatus();
+        String after = before;
+        if (owner && (TicketStatus.RESOLVED.name().equals(before) || TicketStatus.REJECTED.name().equals(before))) {
+            if (ticketMapper.transitionStatus(ticketId, before, TicketStatus.MANUAL_REVIEW.name(), null, null) != 1) {
+                throw new ApiException(HttpStatus.CONFLICT, "工单状态已变化，请刷新后重试");
+            }
+            after = TicketStatus.MANUAL_REVIEW.name();
+        }
+        insertMessage(ticketId, operator, operator.getRole(), "FOLLOW_UP", request.getContent().trim());
+        operationLogService.record(ticketId, "FOLLOW_UP", operator.getId(), operator.getRole(),
+                before, after, request.getContent().trim());
+    }
+
+    @Transactional
+    public void reject(Long ticketId, TicketRejectRequest request) {
+        Ticket ticket = requireTicket(ticketId);
+        SysUser operator = userService.requireCurrentUser();
+        requireStatus(ticket, TicketStatus.MANUAL_REVIEW);
+        requireAssignedAgentOrAdmin(ticket, operator);
+        if (ticketMapper.transitionStatus(ticketId, TicketStatus.MANUAL_REVIEW.name(),
+                TicketStatus.REJECTED.name(), null, null) != 1) {
+            throw new ApiException(HttpStatus.CONFLICT, "工单状态已变化，请刷新后重试");
+        }
+        insertMessage(ticketId, operator, "SYSTEM", "SYSTEM", "工单已驳回：" + request.getReason().trim());
+        operationLogService.record(ticketId, "REJECT", operator.getId(), operator.getRole(),
+                TicketStatus.MANUAL_REVIEW.name(), TicketStatus.REJECTED.name(), request.getReason().trim());
+    }
+
+    @Transactional
+    public void archive(Long ticketId) {
+        Ticket ticket = requireTicket(ticketId);
+        SysUser operator = userService.requireCurrentUser();
+        requireRole(operator, "ADMIN", "仅管理员可以归档工单");
+        if (ticketMapper.archive(ticketId) != 1) {
+            throw new ApiException(HttpStatus.CONFLICT, "仅已关闭或已驳回且未归档的工单可归档");
+        }
+        operationLogService.record(ticketId, "ARCHIVE", operator.getId(), operator.getRole(),
+                ticket.getStatus(), ticket.getStatus(), "管理员归档工单");
+    }
+
+    @Transactional
+    public void adjustPriority(Long ticketId, TicketPriorityRequest request) {
+        Ticket ticket = requireTicket(ticketId);
+        SysUser operator = userService.requireCurrentUser();
+        requireRole(operator, "ADMIN", "仅管理员可以调整工单优先级");
+        requireNotArchived(ticket);
+        String priority = request.getPriority().trim();
+        if (priority.equals(ticket.getPriority())) {
+            throw new ApiException(HttpStatus.CONFLICT, "工单已经是该优先级");
+        }
+        if (ticketMapper.updatePriorityById(ticketId, priority) != 1) {
+            throw new ApiException(HttpStatus.CONFLICT, "优先级更新失败，请刷新后重试");
+        }
+        operationLogService.record(ticketId, "PRIORITY_CHANGE", operator.getId(), operator.getRole(),
+                ticket.getStatus(), ticket.getStatus(), "优先级：" + ticket.getPriority() + " -> " + priority);
+    }
+
+    @Transactional
     public void transferToManual(Long ticketId) {
         Ticket ticket = requireTicket(ticketId);
         SysUser operator = userService.requireCurrentUser();
@@ -135,6 +217,12 @@ public class TicketWorkflowService {
         if (!expected.name().equals(ticket.getStatus())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "当前工单状态为" + ticket.getStatus() + "，不能执行该操作");
+        }
+    }
+
+    private void requireNotArchived(Ticket ticket) {
+        if (Integer.valueOf(1).equals(ticket.getArchived())) {
+            throw new ApiException(HttpStatus.CONFLICT, "已归档工单只允许查看历史记录");
         }
     }
 

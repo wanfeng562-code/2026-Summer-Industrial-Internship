@@ -22,7 +22,7 @@ public class TicketCreateRequest {
     @Size(max = 5000, message = "工单描述不能超过5000个字符")
     private String description;
 
-    @Pattern(regexp = "^$|REFUND|LOGISTICS|DAMAGE|INVOICE|OTHER$", message = "工单分类不正确")
+    @Size(max = 30, message = "工单分类不能超过30个字符")
     private String category;
 
     @Pattern(regexp = "^$|LOW|MEDIUM|HIGH|URGENT$", message = "工单优先级不正确")

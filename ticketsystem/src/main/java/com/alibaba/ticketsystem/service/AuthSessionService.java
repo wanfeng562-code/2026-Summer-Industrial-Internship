@@ -19,6 +19,14 @@ public class AuthSessionService {
         StpUtil.logout();
     }
 
+    public boolean isLogin(Long userId) {
+        return StpUtil.isLogin(userId);
+    }
+
+    public void kickout(Long userId) {
+        StpUtil.kickout(userId);
+    }
+
     public Long getCurrentUserId() {
         return StpUtil.getLoginIdAsLong();
     }
