@@ -113,7 +113,36 @@ data:[DONE]
 - 模型没有退款、改状态、改优先级、关闭工单等写库工具。
 - AI 回复和处理结果分别保存到工单消息、AI 处理日志及工单操作日志。
 
-## 6. 数据库迁移与验证
+## 6. 工作台统计接口
+
+`GET /stats/tickets`，需要 `ticket:query` 权限。后端按当前登录角色的数据范围聚合，前端不得传入用户 ID 或角色扩大统计范围。
+
+响应 `data` 示例：
+
+```json
+{
+  "total": 12,
+  "aiProcessing": 2,
+  "manualReview": 4,
+  "resolved": 3,
+  "closed": 3,
+  "slaWarning": 1,
+  "slaEscalated": 1,
+  "categoryCounts": {
+    "REFUND": 3,
+    "LOGISTICS": 4,
+    "DAMAGE": 2,
+    "INVOICE": 1,
+    "OTHER": 2
+  }
+}
+```
+
+- `USER`：本人工单。
+- `AGENT`：本人已接单工单及未分配的 `MANUAL_REVIEW` 工单。
+- `ADMIN`：全部未删除工单。
+
+## 7. 数据库迁移与验证
 
 已有 7-28/A 成员数据库按顺序执行：
 

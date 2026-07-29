@@ -32,6 +32,7 @@ Authorization: Bearer <token>
 | `/home/orders` | 订单列表 | 本人 | 否 | 全量 |
 | `/home/orders/:id` | 订单详情 | 本人 | 否 | 全量 |
 | `/home/policies` | 策略与 FAQ | 否 | 否 | 是 |
+| `/home/users` | 用户/客服列表 | 否 | 否 | 是 |
 | `/home/chat` | AI 客服 | 是 | 是 | 是 |
 
 菜单隐藏只是体验控制，真实安全边界仍由后端权限和数据范围校验。
@@ -52,6 +53,8 @@ Authorization: Bearer <token>
 - 工单分页：`GET /tickets?current=1&size=10`
 - 创建工单：`POST /tickets`，字段为 `orderId`、`title`、`description`、可选 `category`
 - 工单消息和状态动作使用 C 的专用接口，不调用通用工单更新。
+- 管理员用户分页：`GET /users?current=1&size=10&role=AGENT`
+- 工作台统计：`GET /stats/tickets`，后端按当前 USER/AGENT/ADMIN 数据范围聚合。
 - 分页统一读取 `data.current`、`data.size`、`data.total`、`data.records`。
 
 ## 5. 可复用组件
@@ -66,6 +69,7 @@ Authorization: Bearer <token>
 - [x] `npm ci` 成功，0 vulnerabilities。
 - [x] `npm run build` 成功。
 - [x] C 的详情、策略、AI 页面保留并通过类型检查。
+- [x] 管理员用户/客服列表和工作台真实统计通过类型检查与生产构建。
 - [ ] 本地后端启动后完成 USER 登录、订单、创建工单。
 - [ ] 完成 AGENT 接单、回复、解决、关闭。
 - [ ] 完成 ADMIN 全量订单、分配工单、策略/FAQ 管理。

@@ -1,42 +1,19 @@
-# ticket-vue
+# 工单系统前端
 
-This template should help get you started developing with Vue 3 in Vite.
+正式的完整启动、演示账号和使用说明见仓库根目录 `README.md`。
 
-## Recommended IDE Setup
+前端要求 Node.js `22.18.0+` 或 `24.12.0+`。开发启动：
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
+```powershell
+npm ci
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+浏览器访问 `http://localhost:5173`。Vite 会将 `/api` 请求代理到
+`http://localhost:8080`，因此需要先启动 `ticketsystem/` 后端。
 
-```sh
+类型检查和生产构建：
+
+```powershell
 npm run build
 ```
