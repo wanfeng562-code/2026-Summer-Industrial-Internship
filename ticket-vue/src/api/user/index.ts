@@ -7,6 +7,7 @@ import type {
   RegisterRequest,
   ProfileUpdateRequest,
 } from './type'
+import type { Page } from '@/api/ticket/type'
 
 enum API {
   LOGIN_URL = '/user/login',
@@ -29,3 +30,8 @@ export const requestProfile = () =>
 
 export const requestUpdateProfile = (data: ProfileUpdateRequest) =>
   request.put<any, R<UserProfile>>(API.PROFILE_URL, data)
+
+export const requestUserPage = (current = 1, size = 10, role = '') =>
+  request.get<any, R<Page<UserProfile>>>('/users', {
+    params: { current, size, role: role || undefined },
+  })

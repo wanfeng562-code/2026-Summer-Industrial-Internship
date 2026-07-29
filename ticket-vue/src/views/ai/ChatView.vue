@@ -23,6 +23,8 @@ const messages = ref<ChatMessage[]>([
 ])
 const messageList = ref<HTMLElement>()
 let controller: AbortController | null = null
+let streamTimer: number | null = null
+let streamTimedOut = false
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -43,6 +45,11 @@ const send = async () => {
   input.value = ''
   generating.value = true
   controller = new AbortController()
+  streamTimedOut = false
+  streamTimer = window.setTimeout(() => {
+    streamTimedOut = true
+    controller?.abort()
+  }, 70000)
   await scrollToBottom()
 
   try {
@@ -59,12 +66,15 @@ const send = async () => {
     if (!aiMessage.content) aiMessage.content = '暂时没有生成有效回复，请稍后再试。'
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
-      aiMessage.content ||= '本次生成已停止。'
+      aiMessage.error = streamTimedOut
+      aiMessage.content ||= streamTimedOut ? 'AI 响应超时，请稍后重试。' : '本次生成已停止。'
     } else {
       aiMessage.error = true
       aiMessage.content ||= (error as Error).message || 'AI 服务暂时不可用。'
     }
   } finally {
+    if (streamTimer !== null) window.clearTimeout(streamTimer)
+    streamTimer = null
     generating.value = false
     controller = null
     await scrollToBottom()

@@ -39,6 +39,9 @@
             <el-button v-if="canResolve" type="success" @click="handleResolve">标记已解决</el-button>
             <el-button v-if="canClose" type="primary" @click="handleClose">关闭工单</el-button>
             <el-button v-if="canClaim" type="warning" @click="handleClaim">接单处理</el-button>
+            <el-button v-if="canAssign" type="warning" @click="assignmentDialog = true">
+              {{ ticket?.agentId ? '改派客服' : '分配客服' }}
+            </el-button>
             <el-button v-if="canTransferManual" type="warning" @click="handleTransferManual">
               转人工客服
             </el-button>
@@ -86,6 +89,23 @@
       </el-col>
     </el-row>
   </div>
+
+  <el-dialog v-model="assignmentDialog" title="分配处理客服" width="440px">
+    <el-select v-model="selectedAgentId" filterable placeholder="请选择客服" class="agent-select">
+      <el-option
+        v-for="agent in agents"
+        :key="agent.id"
+        :label="`${agent.nickname}（${agent.username}）`"
+        :value="agent.id"
+      />
+    </el-select>
+    <template #footer>
+      <el-button @click="assignmentDialog = false">取消</el-button>
+      <el-button type="primary" :disabled="!selectedAgentId" @click="handleAssign">
+        确认分配
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -97,13 +117,16 @@ import { useUserInfoStore } from '@/stores/userInfo'
 import MessageBubble from '@/components/MessageBubble.vue'
 import {
   requestAddTicketMsg,
+  requestAssignTicket,
   requestClaimTicket,
   requestCloseTicket,
   requestResolveTicket,
   requestTicketDetail,
   requestTransferManual,
 } from '@/api/ticket'
+import { requestUserPage } from '@/api/user'
 import type { TicketVo } from '@/api/ticket/type'
+import type { UserProfile } from '@/api/user/type'
 
 const router = useRouter()
 const userStore = useUserInfoStore()
@@ -112,6 +135,9 @@ const sending = ref(false)
 const newMessage = ref('')
 const messageListRef = ref<HTMLElement>()
 const ticket = ref<TicketVo | null>(null)
+const agents = ref<UserProfile[]>([])
+const assignmentDialog = ref(false)
+const selectedAgentId = ref<number>()
 
 const ticketId = computed(() => Number(router.currentRoute.value.params.id))
 const currentUserId = computed(() => userStore.getUserId)
@@ -121,6 +147,10 @@ const canClaim = computed(() =>
   currentRole.value === 'AGENT'
   && ticket.value?.status === 'MANUAL_REVIEW'
   && !ticket.value.agentId
+)
+
+const canAssign = computed(() =>
+  currentRole.value === 'ADMIN' && ticket.value?.status === 'MANUAL_REVIEW'
 )
 
 const canResolve = computed(() =>
@@ -142,7 +172,6 @@ const canTransferManual = computed(() =>
 const canSendMessage = computed(() => {
   if (!ticket.value || ticket.value.status === 'CLOSED') return false
   if (currentRole.value === 'USER') return ticket.value.userId === currentUserId.value
-  if (currentRole.value === 'ADMIN') return true
   return currentRole.value === 'AGENT'
     && ticket.value.status === 'MANUAL_REVIEW'
     && ticket.value.agentId === currentUserId.value
@@ -190,10 +219,17 @@ const fetchTicket = async () => {
   try {
     const response = await requestTicketDetail(ticketId.value)
     ticket.value = response.data
+    selectedAgentId.value = response.data.agentId ?? undefined
     scrollToBottom()
   } finally {
     loading.value = false
   }
+}
+
+const loadAgents = async () => {
+  if (currentRole.value !== 'ADMIN') return
+  const response = await requestUserPage(1, 100, 'AGENT')
+  agents.value = response.data.records
 }
 
 const sendMessage = async () => {
@@ -234,6 +270,14 @@ const handleClaim = async () => {
   await fetchTicket()
 }
 
+const handleAssign = async () => {
+  if (!selectedAgentId.value) return
+  await requestAssignTicket(ticketId.value, selectedAgentId.value)
+  assignmentDialog.value = false
+  ElMessage.success('处理客服已更新')
+  await fetchTicket()
+}
+
 const handleTransferManual = async () => {
   await ElMessageBox.confirm('确定将此工单转交人工客服？', '确认')
   await requestTransferManual(ticketId.value)
@@ -241,7 +285,9 @@ const handleTransferManual = async () => {
   await fetchTicket()
 }
 
-onMounted(fetchTicket)
+onMounted(() => {
+  void Promise.all([fetchTicket(), loadAgents()])
+})
 </script>
 
 <style scoped>
@@ -323,6 +369,10 @@ onMounted(fetchTicket)
   border-top: 1px solid #eee;
   padding-top: 16px;
   margin-top: 16px;
+}
+
+.agent-select {
+  width: 100%;
 }
 
 .input-footer {

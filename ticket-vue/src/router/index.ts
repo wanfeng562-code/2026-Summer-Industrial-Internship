@@ -65,6 +65,12 @@ const router = createRouter({
           meta: { title: '售后策略', roles: ['ADMIN'] },
         },
         {
+          path: 'users',
+          name: 'users',
+          component: () => import('../views/users/UserView.vue'),
+          meta: { title: '用户管理', roles: ['ADMIN'] },
+        },
+        {
           path: 'chat',
           name: 'ai-chat',
           component: () => import('../views/ai/ChatView.vue'),

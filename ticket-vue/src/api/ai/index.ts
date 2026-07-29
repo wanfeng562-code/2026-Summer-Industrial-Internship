@@ -50,11 +50,12 @@ export const streamAiChat = async (
     buffer = frames.pop() ?? ''
 
     for (const frame of frames) {
-      let data = ''
+      const dataLines: string[] = []
       for (const line of frame.split('\n')) {
         if (line.startsWith('event:')) eventName = line.slice(6).trim()
-        if (line.startsWith('data:')) data += line.slice(5).trimStart()
+        if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''))
       }
+      const data = dataLines.join('\n')
       if (eventName === 'done') handlers.onDone?.()
       else if (eventName === 'error') handlers.onError?.(data)
       else if (data) handlers.onMessage(data)

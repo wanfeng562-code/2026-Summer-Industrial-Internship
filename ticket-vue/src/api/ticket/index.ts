@@ -45,6 +45,10 @@ export const requestClaimTicket = (ticketId:number)=>{
     return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/claim`)
 }
 
+export const requestAssignTicket = (ticketId:number, agentId:number)=>{
+    return request.put<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/assignee`, { agentId })
+}
+
 export const requestResolveTicket = (ticketId:number, data:TicketResolveRequest)=>{
     return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/resolve`, data)
 }

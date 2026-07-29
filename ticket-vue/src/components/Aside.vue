@@ -14,6 +14,7 @@ const menus = computed(() => {
     { path: '/home/create', title: '创建工单', icon: 'Plus', roles: ['USER'] },
     { path: '/home/orders', title: '订单管理', icon: 'ShoppingCart', roles: ['USER', 'ADMIN'] },
     { path: '/home/policies', title: '售后策略', icon: 'Setting', roles: ['ADMIN'] },
+    { path: '/home/users', title: '用户管理', icon: 'User', roles: ['ADMIN'] },
     { path: '/home/chat', title: 'AI客服', icon: 'ChatDotRound', roles: ['USER', 'AGENT', 'ADMIN'] },
   ]
   return all.filter((menu) => menu.roles.some((role) => roles.includes(role)))
