@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Set;
 
@@ -28,12 +29,15 @@ public class AIService {
     public Flux<String> streamChat(String message) {
         log.info("[AI] stream request promptLength={}", message.length());
         return modelClient.stream(message)
+                .timeout(Duration.ofSeconds(60))
                 .filter(chunk -> chunk != null && !chunk.isEmpty())
                 .onErrorMap(exception -> {
-                    log.warn("[AI] stream request failed: {}", exception.getClass().getSimpleName());
+                    log.error("[AI] stream request failed: {}: {}",
+                            exception.getClass().getSimpleName(), exception.getMessage(), exception);
                     return new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                             "AI服务暂时不可用，请稍后重试");
-                });
+                })
+                .doOnComplete(() -> log.info("[AI] stream response completed"));
     }
 
     public String callAI(String prompt) {

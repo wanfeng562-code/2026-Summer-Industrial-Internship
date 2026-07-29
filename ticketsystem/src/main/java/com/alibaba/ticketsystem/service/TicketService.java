@@ -322,9 +322,6 @@ public class TicketService {
                 && currentUser.getId().equals(ticket.getAgentId())) {
             return;
         }
-        if ("ADMIN".equals(currentUser.getRole())) {
-            return;
-        }
         throw new ApiException(HttpStatus.FORBIDDEN, "无权向该工单发送消息");
     }
 
