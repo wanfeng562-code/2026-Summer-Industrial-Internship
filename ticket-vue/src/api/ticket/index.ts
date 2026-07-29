@@ -1,7 +1,7 @@
 import request from "@/utils/request";
 import type {
     R, Page, TicketVo, Orders, OrderVo, TicketCreateRequest, MessageRequest,
-    TicketResolveRequest, TicketCloseRequest
+    TicketResolveRequest, TicketCloseRequest, TicketQuery
 } from './type'
 
 //定义登录的URL
@@ -13,8 +13,8 @@ enum API{
 }
 
 //发送工单分页列表请求接口
-export const requestTicketPage = (current:number, size = 10)=>{
-    return request.get<any, R<Page<TicketVo>>>(`${API.TICKET_PAGE}?current=${current}&size=${size}`)
+export const requestTicketPage = (current:number, size = 10, query: TicketQuery = {})=>{
+    return request.get<any, R<Page<TicketVo>>>(API.TICKET_PAGE, { params: { current, size, ...query } })
 }
 
 //发送工单详情请求接口
@@ -60,3 +60,21 @@ export const requestCloseTicket = (ticketId:number, data:TicketCloseRequest)=>{
 export const requestTransferManual = (ticketId:number)=>{
     return request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/transfer-manual`)
 }
+
+export const requestFollowUpTicket = (ticketId:number, content:string) =>
+  request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/follow-ups`, { content })
+
+export const requestRejectTicket = (ticketId:number, reason:string) =>
+  request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/reject`, { reason })
+
+export const requestArchiveTicket = (ticketId:number) =>
+  request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/archive`)
+
+export const requestAdjustPriority = (ticketId:number, priority:string) =>
+  request.put<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/priority`, { priority })
+
+export const requestSatisfaction = (ticketId:number, score:number, comment:string) =>
+  request.post<any, R<null>>(`${API.TICKET_DETAIL}/${ticketId}/satisfaction`, { score, comment })
+
+export const downloadTicketCsv = (query: TicketQuery = {}) =>
+  request.get<any, Blob>('/tickets/export', { params: query, responseType: 'blob' })

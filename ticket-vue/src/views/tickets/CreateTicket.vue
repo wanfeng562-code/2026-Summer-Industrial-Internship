@@ -6,6 +6,7 @@ import { ElMessage } from 'element-plus'
 const formRef = ref<FormInstance>()
 
 import { requestOrdersList, requestCreateTicket } from '@/api/ticket'   // @/   src目录下  
+import { requestTicketCategories } from '@/api/admin'
 import type { Orders } from '@/api/ticket/type'
 
 const loading = ref(false)
@@ -27,13 +28,13 @@ const rules = {
   description: [{ required: true, message: '请输入问题描述', trigger: 'blur' }]
 }
 
-const categoryOptions = [
+const categoryOptions = ref([
   { label: '退款退货', value: 'REFUND' },
   { label: '物流异常', value: 'LOGISTICS' },
   { label: '商品破损', value: 'DAMAGE' },
   { label: '发票问题', value: 'INVOICE' },
   { label: '其他', value: 'OTHER' }
-]
+])
 
 onMounted(async () => {
   if (typeof route.query.description === 'string') {
@@ -45,12 +46,14 @@ onMounted(async () => {
     const id = Number(queryOrderId)
     if (Number.isFinite(id)) form.orderId = id
   }
+  const categoryResponse = await requestTicketCategories(false)
+  categoryOptions.value = categoryResponse.data.map((item) => ({ label: item.categoryName, value: item.categoryCode }))
   await listOrders()
 })
 
 const listOrders = async () =>{
   try{
-    const res = await requestOrdersList()
+    const res = await requestOrdersList(1, 100)
     if(res.code == 200){
       orderData.value = res.data.records
     }

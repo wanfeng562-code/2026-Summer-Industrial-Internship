@@ -38,9 +38,17 @@ request.interceptors.response.use(
     }
     return data
   },
-  (error) => {
+  async (error) => {
     const status = error.response?.status
-    const msgFromBody = error.response?.data?.msg
+    let msgFromBody = error.response?.data?.msg as string | undefined
+    if (!msgFromBody && error.response?.data instanceof Blob) {
+      try {
+        const body = JSON.parse(await error.response.data.text()) as { msg?: string }
+        msgFromBody = body.msg
+      } catch {
+        // 下载接口返回的内容不是 JSON 时，使用通用 HTTP 错误提示。
+      }
+    }
     let message = msgFromBody || '网络出现问题'
     switch (status) {
       case 400:

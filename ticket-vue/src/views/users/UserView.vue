@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage, type TagProps } from 'element-plus'
-import { requestUserPage } from '@/api/user'
+import { ElMessage, ElMessageBox, type TagProps } from 'element-plus'
+import { requestKickoutUser, requestResetPassword, requestUserPage } from '@/api/user'
 import type { UserProfile } from '@/api/user/type'
 import type { Page } from '@/api/ticket/type'
 import ErrorState from '@/components/ErrorState.vue'
@@ -48,6 +48,23 @@ const loadUsers = async (current = 1) => {
   }
 }
 
+const kickout = async (user: UserProfile) => {
+  await ElMessageBox.confirm(`确认强制下线“${user.nickname}”？`, '强制下线')
+  await requestKickoutUser(user.id)
+  ElMessage.success('用户已被强制下线')
+  await loadUsers(users.current)
+}
+
+const resetPassword = async (user: UserProfile) => {
+  const { value } = await ElMessageBox.prompt(`为“${user.nickname}”设置新密码`, '重置密码', {
+    inputType: 'password',
+    inputValidator: (text) => (text?.length || 0) >= 6 || '密码至少 6 位',
+  })
+  await requestResetPassword(user.id, value)
+  ElMessage.success('密码已重置，原登录会话已失效')
+  await loadUsers(users.current)
+}
+
 onMounted(() => loadUsers())
 </script>
 
@@ -88,7 +105,19 @@ onMounted(() => loadUsers())
           <template #default="{ row }">{{ row.phone || '-' }}</template>
         </el-table-column>
         <el-table-column prop="reputationScore" label="信誉分" width="90" />
+        <el-table-column label="在线" width="90">
+          <template #default="{ row }"><el-tag :type="row.online ? 'success' : 'info'">{{ row.online ? '在线' : '离线' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column prop="lastLoginTime" label="最后登录" min-width="170">
+          <template #default="{ row }">{{ row.lastLoginTime || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="createTime" label="创建时间" min-width="170" />
+        <el-table-column fixed="right" label="账号运维" width="170">
+          <template #default="{ row }">
+            <el-button link type="warning" :disabled="!row.online" @click="kickout(row)">强制下线</el-button>
+            <el-button link type="danger" @click="resetPassword(row)">重置密码</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-pagination

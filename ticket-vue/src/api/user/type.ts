@@ -24,6 +24,9 @@ export interface UserProfile {
   avatar: string | null
   role: string
   reputationScore: number
+  agentGroupId: number | null
+  online: boolean
+  lastLoginTime: string | null
   createTime: string
   updateTime: string
 }

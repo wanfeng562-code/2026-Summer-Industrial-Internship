@@ -24,6 +24,7 @@
             <el-descriptions-item label="关联订单">{{ ticket?.orderNo }}</el-descriptions-item>
             <el-descriptions-item label="创建用户">{{ ticket?.username }}</el-descriptions-item>
             <el-descriptions-item label="处理客服">{{ ticket?.agentName || '未分配' }}</el-descriptions-item>
+            <el-descriptions-item label="负责坐席组">{{ ticket?.groupName || '未分组' }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ ticket?.createTime }}</el-descriptions-item>
             <el-descriptions-item label="SLA截止">
               <el-tag v-if="ticket?.slaEscalated" type="danger">已超时升级</el-tag>
@@ -45,6 +46,11 @@
             <el-button v-if="canTransferManual" type="warning" @click="handleTransferManual">
               转人工客服
             </el-button>
+            <el-button v-if="canFollowUp" type="primary" plain @click="handleFollowUp">跟进</el-button>
+            <el-button v-if="canReject" type="danger" plain @click="handleReject">驳回</el-button>
+            <el-button v-if="currentRole === 'ADMIN' && !ticket?.archived" plain @click="priorityDialog = true">调整优先级</el-button>
+            <el-button v-if="canArchive" type="info" @click="handleArchive">归档</el-button>
+            <el-button v-if="canSatisfy" type="success" plain @click="handleSatisfaction">满意度评价</el-button>
           </div>
         </el-card>
       </el-col>
@@ -93,7 +99,7 @@
   <el-dialog v-model="assignmentDialog" title="分配处理客服" width="440px">
     <el-select v-model="selectedAgentId" filterable placeholder="请选择客服" class="agent-select">
       <el-option
-        v-for="agent in agents"
+        v-for="agent in availableAgents"
         :key="agent.id"
         :label="`${agent.nickname}（${agent.username}）`"
         :value="agent.id"
@@ -105,6 +111,14 @@
         确认分配
       </el-button>
     </template>
+  </el-dialog>
+
+  <el-dialog v-model="priorityDialog" title="调整优先级" width="400px">
+    <el-select v-model="selectedPriority" class="agent-select">
+      <el-option label="低" value="LOW" /><el-option label="中" value="MEDIUM" />
+      <el-option label="高" value="HIGH" /><el-option label="紧急" value="URGENT" />
+    </el-select>
+    <template #footer><el-button @click="priorityDialog = false">取消</el-button><el-button type="primary" @click="handlePriority">保存</el-button></template>
   </el-dialog>
 </template>
 
@@ -123,6 +137,11 @@ import {
   requestResolveTicket,
   requestTicketDetail,
   requestTransferManual,
+  requestFollowUpTicket,
+  requestRejectTicket,
+  requestArchiveTicket,
+  requestAdjustPriority,
+  requestSatisfaction,
 } from '@/api/ticket'
 import { requestUserPage } from '@/api/user'
 import type { TicketVo } from '@/api/ticket/type'
@@ -138,10 +157,16 @@ const ticket = ref<TicketVo | null>(null)
 const agents = ref<UserProfile[]>([])
 const assignmentDialog = ref(false)
 const selectedAgentId = ref<number>()
+const priorityDialog = ref(false)
+const selectedPriority = ref('MEDIUM')
 
 const ticketId = computed(() => Number(router.currentRoute.value.params.id))
 const currentUserId = computed(() => userStore.getUserId)
 const currentRole = computed(() => userStore.getRoles[0] || '')
+const availableAgents = computed(() => {
+  if (!ticket.value?.groupId) return agents.value
+  return agents.value.filter((agent) => agent.agentGroupId === ticket.value?.groupId)
+})
 
 const canClaim = computed(() =>
   currentRole.value === 'AGENT'
@@ -169,8 +194,21 @@ const canTransferManual = computed(() =>
   currentRole.value === 'USER' && ticket.value?.status === 'AI_PROCESSING'
 )
 
+const canFollowUp = computed(() => Boolean(ticket.value) && !ticket.value?.archived
+  && ticket.value?.status !== 'CLOSED'
+  && (currentRole.value === 'USER'
+    || (currentRole.value === 'AGENT' && ticket.value?.agentId === currentUserId.value)
+    || currentRole.value === 'ADMIN'))
+const canReject = computed(() => ticket.value?.status === 'MANUAL_REVIEW'
+  && (currentRole.value === 'ADMIN'
+    || (currentRole.value === 'AGENT' && ticket.value?.agentId === currentUserId.value)))
+const canArchive = computed(() => currentRole.value === 'ADMIN' && !ticket.value?.archived
+  && ['CLOSED', 'REJECTED'].includes(ticket.value?.status || ''))
+const canSatisfy = computed(() => currentRole.value === 'USER' && ticket.value?.status === 'CLOSED')
+
 const canSendMessage = computed(() => {
-  if (!ticket.value || ticket.value.status === 'CLOSED') return false
+  if (!ticket.value || ticket.value.archived
+    || ['CLOSED', 'REJECTED'].includes(ticket.value.status)) return false
   if (currentRole.value === 'USER') return ticket.value.userId === currentUserId.value
   return currentRole.value === 'AGENT'
     && ticket.value.status === 'MANUAL_REVIEW'
@@ -183,6 +221,7 @@ const statusTagType = (status?: string): TagProps['type'] => {
     MANUAL_REVIEW: 'primary',
     RESOLVED: 'success',
     CLOSED: 'info',
+    REJECTED: 'danger',
   }
   return map[status || ''] || 'info'
 }
@@ -220,6 +259,7 @@ const fetchTicket = async () => {
     const response = await requestTicketDetail(ticketId.value)
     ticket.value = response.data
     selectedAgentId.value = response.data.agentId ?? undefined
+    selectedPriority.value = response.data.priority
     scrollToBottom()
   } finally {
     loading.value = false
@@ -283,6 +323,39 @@ const handleTransferManual = async () => {
   await requestTransferManual(ticketId.value)
   ElMessage.success('已转人工处理')
   await fetchTicket()
+}
+
+const handleFollowUp = async () => {
+  const { value } = await ElMessageBox.prompt('请输入跟进内容', '工单跟进', {
+    inputValidator: (text) => Boolean(text?.trim()) || '跟进内容不能为空',
+  })
+  await requestFollowUpTicket(ticketId.value, value.trim()); ElMessage.success('跟进已保存'); await fetchTicket()
+}
+
+const handleReject = async () => {
+  const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回工单', {
+    inputValidator: (text) => Boolean(text?.trim()) || '驳回原因不能为空',
+  })
+  await requestRejectTicket(ticketId.value, value.trim()); ElMessage.success('工单已驳回'); await fetchTicket()
+}
+
+const handleArchive = async () => {
+  await ElMessageBox.confirm('归档后工单将进入归档列表，历史记录仍保留。确定继续？', '归档工单')
+  await requestArchiveTicket(ticketId.value); ElMessage.success('工单已归档'); await fetchTicket()
+}
+
+const handlePriority = async () => {
+  await requestAdjustPriority(ticketId.value, selectedPriority.value)
+  priorityDialog.value = false; ElMessage.success('优先级已更新'); await fetchTicket()
+}
+
+const handleSatisfaction = async () => {
+  const { value: score } = await ElMessageBox.prompt('请输入 1-5 分', '满意度评价', {
+    inputPattern: /^[1-5]$/, inputErrorMessage: '评分必须是 1-5 的整数',
+  })
+  const { value: comment } = await ElMessageBox.prompt('请输入评价说明（可简短填写）', '评价说明')
+  await requestSatisfaction(ticketId.value, Number(score), comment || '')
+  ElMessage.success('感谢你的评价')
 }
 
 onMounted(() => {

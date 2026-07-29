@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { requestDashboardStats, type DashboardStats } from '@/api/stats'
+import { downloadServiceReport, requestDashboardStats, requestServiceReport, type DashboardStats, type ServiceReport } from '@/api/stats'
+import { requestAgentGroups } from '@/api/admin'
 import { useUserInfoStore } from '@/stores/userInfo'
 
 const userStore = useUserInfoStore()
@@ -12,11 +13,15 @@ const stats = ref<DashboardStats>({
   aiProcessing: 0,
   manualReview: 0,
   resolved: 0,
+  rejected: 0,
   closed: 0,
   slaWarning: 0,
   slaEscalated: 0,
   categoryCounts: {},
 })
+const serviceReport = ref<ServiceReport>()
+const reportMonth = ref(new Date().toISOString().slice(0, 7))
+const canViewService = ref(false)
 
 const categoryLabels: Record<string, string> = {
   REFUND: '退款退货',
@@ -53,7 +58,25 @@ const loadStats = async () => {
   }
 }
 
-onMounted(loadStats)
+const loadService = async () => {
+  canViewService.value = userStore.isAdmin
+  if (!canViewService.value && userStore.isAgent) {
+    const response = await requestAgentGroups(false)
+    canViewService.value = response.data.some((group) => group.leaderId === userStore.getUserId)
+  }
+  if (!canViewService.value) return
+  const [year, month] = reportMonth.value.split('-').map(Number)
+  serviceReport.value = (await requestServiceReport(year, month)).data
+}
+
+const exportService = async () => {
+  const [year, month] = reportMonth.value.split('-').map(Number)
+  const blob = await downloadServiceReport(year, month)
+  const url = URL.createObjectURL(blob); const link = document.createElement('a')
+  link.href = url; link.download = `service-report-${reportMonth.value}.csv`; link.click(); URL.revokeObjectURL(url)
+}
+
+onMounted(() => { void Promise.all([loadStats(), loadService()]) })
 </script>
 
 <template>
@@ -175,6 +198,18 @@ onMounted(loadStats)
         </el-card>
       </el-col>
     </el-row>
+
+    <el-card v-if="canViewService && serviceReport" class="service-panel">
+      <template #header><div class="card-header"><span>服务运营与满意度</span><div><el-date-picker v-model="reportMonth" type="month" value-format="YYYY-MM" @change="loadService" /><el-button class="export" @click="exportService">导出月报</el-button></div></div></template>
+      <el-row :gutter="16">
+        <el-col :span="4"><el-statistic title="接待量" :value="serviceReport.receptionCount" /></el-col>
+        <el-col :span="4"><el-statistic title="AI 自动回复率" :value="serviceReport.aiReplyRate" suffix="%" /></el-col>
+        <el-col :span="4"><el-statistic title="转人工率" :value="serviceReport.transferToHumanRate" suffix="%" /></el-col>
+        <el-col :span="4"><el-statistic title="完结率" :value="serviceReport.completionRate" suffix="%" /></el-col>
+        <el-col :span="4"><el-statistic title="平均满意度" :value="serviceReport.averageSatisfaction" suffix=" / 5" /></el-col>
+        <el-col :span="4"><el-statistic title="评价数" :value="serviceReport.satisfactionCount" /></el-col>
+      </el-row>
+    </el-card>
   </div>
 </template>
 
@@ -222,6 +257,7 @@ onMounted(loadStats)
 .panel {
   min-height: 310px;
 }
+.service-panel{margin-top:20px}.export{margin-left:10px}
 
 .categories,
 .quick-actions {

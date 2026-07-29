@@ -94,7 +94,10 @@ const handleLogin = async () => {
         : response.data.role ? [response.data.role] : [],
       permissions: response.data.permissions || [],
     })
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/home'
+    const requestedRedirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const redirect = requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
+      ? requestedRedirect
+      : '/home'
     await router.push(redirect)
     ElMessage.success('登录成功')
   } finally {

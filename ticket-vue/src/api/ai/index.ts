@@ -1,19 +1,44 @@
 import request from '@/utils/request'
+import router from '@/router'
 import { useUserInfoStore } from '@/stores/userInfo'
 import type { R } from '@/api/ticket/type'
 
 export interface AiChatResponse {
   content: string
+  sessionNo: string
 }
 
-export const requestAiChat = (message: string) => {
-  return request.post<any, R<AiChatResponse>>('/ai/chat', { message })
+export interface AiChatSession {
+  id: number
+  sessionNo: string
+  title: string
+  updateTime: string
 }
+
+export interface AiChatHistoryMessage {
+  id: number
+  senderType: 'USER' | 'AI'
+  content: string
+  createTime: string
+}
+
+export const requestAiChat = (message: string, sessionNo?: string) => {
+  return request.post<any, R<AiChatResponse>>('/ai/chat', { message, sessionNo })
+}
+
+export const requestAiSessions = () =>
+  request.get<any, R<AiChatSession[]>>('/ai/chat/sessions')
+
+export const requestAiSessionMessages = (sessionNo: string) =>
+  request.get<any, R<AiChatHistoryMessage[]>>(
+    `/ai/chat/sessions/${encodeURIComponent(sessionNo)}/messages`,
+  )
 
 export interface AiStreamHandlers {
   onMessage: (content: string) => void
   onDone?: () => void
   onError?: (message: string) => void
+  onSession?: (sessionNo: string) => void
 }
 
 /**
@@ -21,6 +46,7 @@ export interface AiStreamHandlers {
  */
 export const streamAiChat = async (
   message: string,
+  sessionNo: string | undefined,
   signal: AbortSignal,
   handlers: AiStreamHandlers,
 ) => {
@@ -31,11 +57,24 @@ export const streamAiChat = async (
       'Content-Type': 'application/json;charset=utf-8',
       ...(userStore.getToken ? { Authorization: `Bearer ${userStore.getToken}` } : {}),
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, sessionNo }),
     signal,
   })
   if (!response.ok || !response.body) {
-    throw new Error(response.status === 401 ? '登录已失效，请重新登录' : 'AI 服务连接失败')
+    let message = response.status === 401 ? '登录已失效，请重新登录' : 'AI 服务连接失败'
+    try {
+      const errorBody = await response.clone().json() as { msg?: string }
+      message = errorBody.msg || message
+    } catch {
+      // 非 JSON 错误响应沿用按状态码生成的安全提示。
+    }
+    if (response.status === 401) {
+      userStore.clearUser()
+      if (router.currentRoute.value.path !== '/login') {
+        void router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
+      }
+    }
+    throw new Error(message)
   }
 
   const reader = response.body.getReader()
@@ -56,7 +95,8 @@ export const streamAiChat = async (
         if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''))
       }
       const data = dataLines.join('\n')
-      if (eventName === 'done') handlers.onDone?.()
+      if (eventName === 'session') handlers.onSession?.(data)
+      else if (eventName === 'done') handlers.onDone?.()
       else if (eventName === 'error') handlers.onError?.(data)
       else if (data) handlers.onMessage(data)
       eventName = 'message'

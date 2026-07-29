@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import type { Page, R } from '@/api/ticket/type'
 
-export type TicketCategory = 'REFUND' | 'LOGISTICS' | 'DAMAGE' | 'INVOICE' | 'OTHER'
+export type TicketCategory = string
 
 export interface AfterSalePolicy {
   id: number
@@ -59,3 +59,39 @@ export const requestUpdateFaq = (id: number, data: FaqRequest) =>
 
 export const requestDeleteFaq = (id: number) =>
   request.delete<any, R<null>>(`/faqs/${id}`)
+
+export interface FaqSemanticConfig {
+  id: number
+  enabled: number
+  similarityThreshold: number
+  maxCandidates: number
+  maxResults: number
+  updateTime: string
+}
+
+export interface SemanticFaqResult {
+  faq: Faq
+  similarity: number
+}
+
+export const requestFaqSemanticConfig = () =>
+  request.get<any, R<FaqSemanticConfig>>('/faqs/semantic-config')
+
+export const requestUpdateFaqSemanticConfig = (data: Omit<FaqSemanticConfig, 'id' | 'updateTime'>) =>
+  request.put<any, R<FaqSemanticConfig>>('/faqs/semantic-config', data)
+
+export const requestFaqSemanticSearch = (question: string, category?: string) =>
+  request.get<any, R<{ mode: string; results: SemanticFaqResult[] }>>('/faqs/semantic-search', {
+    params: { question, category },
+  })
+
+export const requestImportFaqCsv = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return request.post<any, R<number>>('/faqs/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const downloadFaqCsv = () =>
+  request.get<any, Blob>('/faqs/export', { responseType: 'blob' })

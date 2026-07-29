@@ -11,6 +11,11 @@ import {
   requestPolicyPage,
   requestUpdateFaq,
   requestUpdatePolicy,
+  requestFaqSemanticConfig,
+  requestUpdateFaqSemanticConfig,
+  requestFaqSemanticSearch,
+  requestImportFaqCsv,
+  downloadFaqCsv,
 } from '@/api/policy'
 import type {
   AfterSalePolicy,
@@ -18,17 +23,20 @@ import type {
   FaqRequest,
   PolicyRequest,
   TicketCategory,
+  FaqSemanticConfig,
+  SemanticFaqResult,
 } from '@/api/policy'
+import { requestTicketCategories } from '@/api/admin'
 
-const categories: Array<{ label: string; value: TicketCategory }> = [
+const categories = ref<Array<{ label: string; value: TicketCategory }>>([
   { label: '退款退货', value: 'REFUND' },
   { label: '物流异常', value: 'LOGISTICS' },
   { label: '商品破损', value: 'DAMAGE' },
   { label: '发票问题', value: 'INVOICE' },
   { label: '其他', value: 'OTHER' },
-]
+])
 const categoryName = (value: TicketCategory) =>
-  categories.find((item) => item.value === value)?.label || value
+  categories.value.find((item) => item.value === value)?.label || value
 
 const loading = ref(false)
 const policies = ref<AfterSalePolicy[]>([])
@@ -122,6 +130,10 @@ const emptyFaq = (): FaqRequest => ({
   enabled: 1,
 })
 const faqForm = reactive<FaqRequest>(emptyFaq())
+const semanticConfig = reactive<Omit<FaqSemanticConfig, 'id' | 'updateTime'>>({ enabled: 0, similarityThreshold: 0.65, maxCandidates: 30, maxResults: 5 })
+const semanticQuestion = ref('')
+const semanticResults = ref<SemanticFaqResult[]>([])
+const semanticMode = ref('')
 
 const loadFaqs = async () => {
   loading.value = true
@@ -165,8 +177,32 @@ const deleteFaq = async (faq: Faq) => {
   await loadFaqs()
 }
 
+const loadSemanticConfig = async () => Object.assign(semanticConfig, (await requestFaqSemanticConfig()).data)
+const saveSemanticConfig = async () => {
+  await requestUpdateFaqSemanticConfig(semanticConfig); ElMessage.success('语义检索配置已保存')
+}
+const semanticSearch = async () => {
+  if (!semanticQuestion.value.trim()) return ElMessage.warning('请输入测试问题')
+  const response = await requestFaqSemanticSearch(semanticQuestion.value.trim())
+  semanticResults.value = response.data.results; semanticMode.value = response.data.mode
+}
+const importFaq = async (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const response = await requestImportFaqCsv(file)
+  ElMessage.success(`成功导入 ${response.data} 条 FAQ`); await loadFaqs()
+  ;(event.target as HTMLInputElement).value = ''
+}
+const exportFaq = async () => {
+  const blob = await downloadFaqCsv(); const url = URL.createObjectURL(blob)
+  const link = document.createElement('a'); link.href = url; link.download = 'faqs.csv'; link.click(); URL.revokeObjectURL(url)
+}
+
 onMounted(() => {
-  void Promise.all([loadPolicies(), loadFaqs()])
+  void Promise.all([
+    loadPolicies(), loadFaqs(), loadSemanticConfig(),
+    requestTicketCategories(false).then((res) => { categories.value = res.data.map((item) => ({ label: item.categoryName, value: item.categoryCode })) }),
+  ])
 })
 </script>
 
@@ -233,6 +269,8 @@ onMounted(() => {
           />
           <el-button @click="loadFaqs">检索</el-button>
           <el-button type="primary" @click="openFaq()">新增FAQ</el-button>
+          <label class="el-button"><input class="file-input" type="file" accept=".csv,text/csv" @change="importFaq" />导入 CSV</label>
+          <el-button @click="exportFaq">导出 CSV</el-button>
         </div>
         <el-table :data="faqs" empty-text="暂无FAQ">
           <el-table-column label="分类" width="110">
@@ -262,6 +300,21 @@ onMounted(() => {
           class="pagination"
           @current-change="loadFaqs"
         />
+      </el-tab-pane>
+
+      <el-tab-pane label="语义检索配置">
+        <el-alert title="启用后调用当前 DashScope 对候选 FAQ 做语义打分；模型异常时自动退回关键词检索。" type="info" :closable="false" />
+        <el-form class="semantic-form" label-width="120px">
+          <el-form-item label="启用语义检索"><el-switch v-model="semanticConfig.enabled" :active-value="1" :inactive-value="0" /></el-form-item>
+          <el-form-item label="相似度阈值"><el-input-number v-model="semanticConfig.similarityThreshold" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item label="候选 FAQ 数"><el-input-number v-model="semanticConfig.maxCandidates" :min="5" :max="100" /></el-form-item>
+          <el-form-item label="最大返回数"><el-input-number v-model="semanticConfig.maxResults" :min="1" :max="20" /></el-form-item>
+          <el-form-item><el-button type="primary" @click="saveSemanticConfig">保存配置</el-button></el-form-item>
+        </el-form>
+        <el-divider>语义检索测试</el-divider>
+        <div class="semantic-test"><el-input v-model="semanticQuestion" placeholder="输入自然语言问题" @keyup.enter="semanticSearch" /><el-button type="primary" @click="semanticSearch">测试</el-button></div>
+        <el-alert v-if="semanticMode" :title="`本次检索模式：${semanticMode}`" type="success" :closable="false" />
+        <el-table :data="semanticResults"><el-table-column prop="faq.question" label="匹配问题" /><el-table-column prop="faq.answer" label="答案" show-overflow-tooltip /><el-table-column prop="similarity" label="相似度" width="100" /></el-table>
       </el-tab-pane>
     </el-tabs>
   </el-card>
@@ -356,4 +409,5 @@ onMounted(() => {
   margin: 0 10px;
   color: #909399;
 }
+.file-input{display:none}.semantic-form{max-width:520px;margin-top:20px}.semantic-test{display:flex;gap:10px;margin-bottom:12px}
 </style>

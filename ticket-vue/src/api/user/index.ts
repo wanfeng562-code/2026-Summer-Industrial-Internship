@@ -35,3 +35,9 @@ export const requestUserPage = (current = 1, size = 10, role = '') =>
   request.get<any, R<Page<UserProfile>>>('/users', {
     params: { current, size, role: role || undefined },
   })
+
+export const requestKickoutUser = (id: number) =>
+  request.post<any, R<null>>(`/users/${id}/kickout`)
+
+export const requestResetPassword = (id: number, newPassword: string) =>
+  request.post<any, R<null>>(`/users/${id}/reset-password`, { newPassword })

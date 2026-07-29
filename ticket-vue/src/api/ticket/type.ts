@@ -25,6 +25,8 @@ export interface TicketVo{
     userNickname: string
     agentId:number | null
     agentName:string | null
+    groupId:number | null
+    groupName:string | null
     orderId:number
     orderNo:string
     title: string
@@ -39,6 +41,8 @@ export interface TicketVo{
     slaDeadline:string
     resolveTime:string | null
     closeTime:string | null
+    archived:number
+    archiveTime:string | null
     createTime:string
     updateTime:string
     messages:Array<TicketMessageVo>
@@ -103,5 +107,13 @@ export interface TicketResolveRequest {
 
 export interface TicketCloseRequest {
     reason:string
+}
+
+export interface TicketQuery {
+  keyword?: string
+  status?: string
+  category?: string
+  priority?: string
+  archived?: boolean
 }
 
